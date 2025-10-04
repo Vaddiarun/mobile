@@ -1,6 +1,7 @@
 // app/(tabs)/_layout.tsx
+
 import { Tabs } from 'expo-router';
-import { View } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -13,47 +14,48 @@ export default function TabsLayout() {
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: false,
+        tabBarActiveTintColor: '#ffffff',
+        tabBarInactiveTintColor: 'rgba(255,255,255,0.6)',
         tabBarStyle: {
           position: 'absolute',
-          backgroundColor: 'rgba(0,0,0,0.8)',
+          backgroundColor: 'rgba(0,0,0,0.85)',
           borderTopWidth: 0,
           elevation: 0,
-          height: 60,
+          height: 44,
           alignSelf: 'center',
-          borderRadius: 30,
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingHorizontal: 10,
+          borderRadius: 32,
+          paddingHorizontal: 12,
           marginLeft: 20,
           marginRight: 20,
-          marginBottom: insets.bottom < 30 ? 30 : 60,
+          marginBottom: Math.max(insets.bottom, 50),
         },
-        tabBarIcon: ({ focused }) => {
+        tabBarItemStyle: { justifyContent: 'center', alignItems: 'center' },
+        tabBarIconStyle: { justifyContent: 'center', alignItems: 'center' },
+        tabBarIcon: ({ focused, color, size }) => {
           const isQR = route.name === 'qr-scanner';
           const name =
-            route.name === 'index' ? 'home' : route.name === 'history' ? 'history' : undefined;
+            route.name === 'index' ? 'home' : route.name === 'history' ? 'history' : 'home';
 
+          // circular highlight when focused
           return (
-            <View
-              className={`mt-2 h-16 w-16 items-center justify-center rounded-full ${
-                focused ? 'bg-blue-600' : 'bg-transparent'
-              }`}>
+            <View style={[styles.dot, focused && styles.dotFocused]}>
               {isQR ? (
-                <MaterialCommunityIcons name="line-scan" size={focused ? 35 : 25} color="#fff" />
+                <MaterialCommunityIcons name="line-scan" size={focused ? 30 : 24} color={color} />
               ) : (
-                <MaterialIcons
-                  name={(name as any) ?? 'home'}
-                  size={focused ? 35 : 25}
-                  color="#fff"
-                />
+                <MaterialIcons name={name as any} size={focused ? 30 : 24} color={color} />
               )}
             </View>
           );
         },
       })}>
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="qr-scanner" options={{ title: 'QRScaner' }} />
+      <Tabs.Screen name="qr-scanner" options={{ title: 'QRScanner' }} />
       <Tabs.Screen name="history" options={{ title: 'History' }} />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  dot: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  dotFocused: { backgroundColor: '#2563EB' }, // blue-600
+});

@@ -1,4 +1,7 @@
-// app/_layout.tsx
+import 'react-native-reanimated';
+import '../global.css';
+import './tw-interop';
+
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 

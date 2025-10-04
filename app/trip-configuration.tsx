@@ -1,10 +1,609 @@
 // app/trip-configuration.tsx
-import { Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  TextInput,
+  Alert,
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import Geolocation from 'react-native-geolocation-service';
+import Geocoder from 'react-native-geocoding';
+import {
+  AutocompleteDropdown,
+  AutocompleteDropdownContextProvider,
+} from 'react-native-autocomplete-dropdown';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import axios from 'axios';
 
-export default function TripConfigurationStub() {
-  return (
-    <View className="flex-1 items-center justify-center bg-white">
-      <Text className="text-lg">Trip Configuration placeholder</Text>
+import { getUser, getTrips, saveTrip, clearTrip } from '../mmkv-storage/storage';
+import LoaderModal from '../components/LoaderModel';
+import StatusModal from '../components/StatusModel';
+import { BASE_URL } from '../services/apiClient';
+import { EndPoints } from '../services/endPoints';
+import { Buffer } from 'buffer';
+
+const VITE_GOOGLE_API_KEY = 'AIzaSyDsqWho-EyUaPIe2Sxp8X2tw4x7SCLOW-A';
+
+type TripStatus = 0 | 1;
+type PacketsPayload = any;
+
+export default function TripConfiguration() {
+  const router = useRouter();
+  const { packets: p, tripStatus: ts, deviceName: dn, packetsCount: pc } = useLocalSearchParams();
+
+  // Expo Router params arrive as strings. Parse if JSON strings were sent.
+  const packets: PacketsPayload = useMemo(() => {
+    try {
+      return typeof p === 'string' ? JSON.parse(p) : p;
+    } catch {
+      return p;
+    }
+  }, [p]);
+  const packetsCount: any = useMemo(() => {
+    try {
+      return typeof pc === 'string' ? JSON.parse(pc) : pc;
+    } catch {
+      return pc;
+    }
+  }, [pc]);
+
+  const deviceName = typeof dn === 'string' ? dn : '';
+  const initialStatus: TripStatus = ((typeof ts === 'string' ? Number(ts) : ts) as TripStatus) ?? 0;
+
+  const [statusTrip, setStatusTrip] = useState<TripStatus>(initialStatus); // 0 not started, 1 started
+  const [customer, setCustomer] = useState<any | string>('');
+  const [fileName, setFileName] = useState('');
+  const [box, setBox] = useState<any>('');
+  const [location, setLocation] = useState<string>('');
+  const [locationsRaw, setLocationsRaw] = useState('');
+  const [tripName, setTripName] = useState('');
+  const [errors, setErrors] = useState<{ [k: string]: string }>({});
+  const [loading, setLoading] = useState(false);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [profilesData, setProfilesData] = useState<any>(null);
+  const [boxProfiles, setBoxProfiles] = useState<any[] | null>(null);
+  const [customizeBox, setCustomizeBox] = useState(false);
+  const [tempMin, setTempMin] = useState(0);
+  const [tempMax, setTempMax] = useState(0);
+  const [humMin, setHumMin] = useState(0);
+  const [humMax, setHumMax] = useState(0);
+  const [modelLoader, setModelLoader] = useState(false);
+  const [stopLat, setStopLong] = useState({ latitude: 0, longitude: 0 });
+
+  const [modalType, setModalType] = useState<'success' | 'error' | 'warning' | 'info'>('success');
+  setModalType('success');
+  setModelLoader(true);
+
+  let type: 'success' | 'error' | 'warning' | 'info' | null;
+
+  const user = getUser();
+
+  const customizeProfile = {
+    profileName: 'customize_profile',
+    minTemp: 0,
+    maxTemp: 0,
+    minHum: 0,
+    maxHum: 0,
+    creator: user?.data?.user?.Email || '',
+    createdBy: user?.data?.user?.Email || '',
+    phoneNumber: user?.data?.user?.Phone || '',
+  };
+
+  const allTrips = getTrips() || [];
+
+  const fetchLocation = () => {
+    setLoading(true);
+    Geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          if (latitude == null || longitude == null) throw new Error('Lat/Lng undefined');
+
+          const coord = `${latitude}, ${longitude}`;
+          setLocationsRaw(coord);
+          setStopLong({ latitude, longitude });
+
+          const geo = await Geocoder.from(latitude, longitude);
+          const address = geo?.results?.[0]?.formatted_address;
+          if (!address) throw new Error('No address from coords');
+          setLocation(address);
+        } catch (e: any) {
+          Alert.alert('Location Error', e?.message || 'Something went wrong');
+        } finally {
+          setLoading(false);
+        }
+      },
+      (err) => {
+        setLoading(false);
+        Alert.alert('Location Error', err.message);
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 1000 }
+    );
+  };
+
+  const Counter = ({ value, setValue }: { value: number; setValue: (n: number) => void }) => (
+    <View className="items-center">
+      <View className="flex-row items-center gap-4">
+        <TouchableOpacity onPress={() => setValue(value - 1)}>
+          <Text className="text-[26px] font-bold text-[#1a50db]">-</Text>
+        </TouchableOpacity>
+
+        <View className="h-[35px] w-[35px] items-center justify-center rounded-md border border-[#1a50db]">
+          <Text className="text-base">{value}</Text>
+        </View>
+
+        <TouchableOpacity onPress={() => setValue(value + 1)}>
+          <Text className="text-[26px] font-bold text-[#1a50db]">+</Text>
+        </TouchableOpacity>
+      </View>
     </View>
+  );
+
+  const getProfiles = async (token: string) => {
+    if (!token) return;
+    setApiLoading(true);
+    try {
+      const res = await axios.get(
+        `${BASE_URL}/${EndPoints.GET_CUSTOMER_BOX_PROFILES}?deviceID=G4200030`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const boxList: any[] = res?.data?.data?.boxProfiles ?? [];
+      const customized = [...boxList, { boxProfile: customizeProfile }];
+      setBoxProfiles(customized);
+      setProfilesData(res.data?.data);
+    } catch (e) {
+      // silent log if needed
+    } finally {
+      setApiLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    Geocoder.init(VITE_GOOGLE_API_KEY, { language: 'en' });
+    const now = Date.now();
+    setTripName(`Trip_${deviceName}_${now}`);
+    setFileName(`${deviceName}_${now}`);
+  }, [deviceName]);
+
+  useEffect(() => {
+    if (user) {
+      getProfiles(user?.data?.token);
+      fetchLocation();
+    }
+  }, []);
+
+  const validateForm = () => {
+    const e: Record<string, string> = {};
+    if (!customer) e.customer = 'Customer profile is required';
+    if (!box) e.box = 'Box profile is required';
+    if (!location) e.location = 'Location is required';
+    if (!tripName) e.tripName = 'Trip name is required';
+
+    if (customizeBox) {
+      if (tempMin === 0) e.temp = 'Temperature min is required';
+      else if (tempMax === 0) e.temp = 'Temperature max is required';
+      else if (tempMin < -20 || tempMin > 80) e.temp = 'Temperature min must be between -20 and 80';
+      else if (tempMax < -20 || tempMax > 80) e.temp = 'Temperature max must be between -20 and 80';
+      else if (tempMin > tempMax) e.temp = 'Temperature min cannot be greater than max';
+      if (humMin === 0) e.humidity = 'Humidity min is required';
+      else if (humMax === 0) e.humidity = 'Humidity max is required';
+      else if (humMin < 0 || humMin > 100) e.humidity = 'Humidity min must be between 0 and 100';
+      else if (humMax < 0 || humMax > 100) e.humidity = 'Humidity max must be between 0 and 100';
+      else if (humMin > humMax) e.humidity = 'Humidity min cannot be greater than max';
+    }
+
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleReset = () => {
+    setCustomer('');
+    setBox('');
+    setTripName('');
+    setStopLong({ latitude: 0, longitude: 0 });
+    setLocation('');
+    setLocationsRaw('');
+    setTempMax(0);
+    setTempMin(0);
+    setHumMax(0);
+    setHumMin(0);
+    router.replace('/(tabs)/index');
+  };
+
+  const handleReset2 = () => {
+    setCustomer('');
+    setBox('');
+    setTripName('');
+    setStopLong({ latitude: 0, longitude: 0 });
+    setLocation('');
+    setLocationsRaw('');
+    router.replace('/(tabs)/index');
+    setStatusTrip(0);
+    clearTrip();
+  };
+
+  const handleStartTrip = () => {
+    if (!validateForm()) return;
+
+    const tripConfig = {
+      customerProfile: customer?.customerProfile,
+      boxProfile:
+        box?.boxProfile?.profileName === 'customize_profile'
+          ? {
+              ...customizeProfile,
+              minTemp: tempMin,
+              maxTemp: tempMax,
+              minHum: humMin,
+              maxHum: humMax,
+            }
+          : box?.boxProfile,
+    };
+
+    const body = {
+      username: user?.data?.user?.Username,
+      email: user?.data?.user?.Email,
+      phone: user?.data?.user?.Phone,
+      tripName,
+      deviceID: deviceName,
+      location: locationsRaw,
+      tripConfig,
+    };
+
+    setApiLoading(true);
+    axios
+      .post(`${BASE_URL}/${EndPoints.START_TRIP}`, body, {
+        headers: { Authorization: `Bearer ${user?.data?.token}` },
+      })
+      .then(() => {
+        saveTrip(body);
+        type = 'success';
+        setModelLoader(true);
+        handleReset();
+      })
+      .catch(() => {
+        Alert.alert('Error', 'Something went wrong...');
+      })
+      .finally(() => setApiLoading(false));
+  };
+
+  const handleStopTrip = () => {
+    if (stopLat.latitude === 0) {
+      Alert.alert('Location', 'Location is required');
+      return;
+    }
+
+    const bufferOne = Buffer.from(JSON.stringify(packets?.packets || []));
+    const dataString = Array.from(bufferOne).join(',');
+
+    const body = {
+      tripName: allTrips[0]?.tripName,
+      fileName: `${fileName}.csv`,
+      data: dataString,
+      location: stopLat,
+      Battery: `${packetsCount?.expected?.batteryPercentage ?? 0}`,
+      totalPackets: 34,
+      deviceName,
+      packetType: 213,
+      ...(packets?.allData?.payloadLength != null && {
+        payloadLength: packets.allData.payloadLength,
+      }),
+    };
+
+    setApiLoading(true);
+    axios
+      .post(`${BASE_URL}/${EndPoints.STOP_TRIP}`, body, {
+        headers: {
+          Authorization: `Bearer ${user?.data?.token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+      .then(() => {
+        type = 'success';
+        setModelLoader(true);
+        handleReset2();
+      })
+      .catch(() => {
+        Alert.alert('Error', 'Something went wrong...');
+      })
+      .finally(() => setApiLoading(false));
+  };
+
+  return (
+    <AutocompleteDropdownContextProvider>
+      <SafeAreaView className="flex-1 bg-white">
+        {/* Header */}
+        <View className="flex-row items-center justify-between px-4 pb-2 pt-1">
+          <Pressable
+            className="h-10 w-10 items-center justify-center"
+            onPress={() => router.push('/(tabs)/qr-scanner')}
+            accessibilityRole="button"
+            accessibilityLabel="Back">
+            <MaterialCommunityIcons name="arrow-left" size={22} color="#000" />
+          </Pressable>
+          <Text className="text-base font-semibold text-black">Trip Configuration</Text>
+          <Pressable className="h-10 w-10 items-center justify-center">
+            <MaterialCommunityIcons name="dots-vertical" size={20} color="#000" />
+          </Pressable>
+        </View>
+
+        <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingBottom: 24 }}>
+          {/* Start view */}
+          {statusTrip === 0 ? (
+            <View>
+              {/* Customer */}
+              <Text className="mt-3 text-sm font-medium text-black">Customer Profile:</Text>
+              <AutocompleteDropdown
+                clearOnFocus={false}
+                closeOnBlur
+                closeOnSubmit={false}
+                initialValue={customer?.customerProfile?.profileName || ''}
+                dataSet={profilesData?.customerProfiles}
+                editable={false}
+                showClear={false}
+                textInputProps={{
+                  placeholder: 'Select customer profile',
+                  placeholderTextColor: '#000',
+                  value: customer?.customerProfile?.profileName || '',
+                  style: { color: '#000' },
+                }}
+                containerStyle={{ elevation: 0, backgroundColor: '#fff', height: 60 }}
+                inputContainerStyle={{
+                  borderWidth: 0.8,
+                  borderColor: '#7D94EF',
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                  backgroundColor: '#fff',
+                }}
+                suggestionsListContainerStyle={{
+                  borderWidth: 0.8,
+                  borderColor: '#7D94EF',
+                  height: 205,
+                }}
+                renderItem={(item: any) => (
+                  <Text key={item.id} style={{ color: '#000', padding: 15 }}>
+                    {item.customerProfile.profileName}
+                  </Text>
+                )}
+                onSelectItem={(item) => setCustomer(item as never)}
+              />
+              {errors.customer ? (
+                <Text className="ml-1 mt-1 text-[12px] text-red-600">{errors.customer}</Text>
+              ) : null}
+
+              {/* Box */}
+              <Text className="mt-3 text-sm font-medium text-black">Box Profile:</Text>
+              {box?.boxProfile?.profileName !== 'customize_profile' ? (
+                <AutocompleteDropdown
+                  clearOnFocus={false}
+                  closeOnBlur
+                  closeOnSubmit={false}
+                  initialValue={box?.boxProfile?.profileName || ''}
+                  dataSet={boxProfiles || []}
+                  editable={false}
+                  showClear={false}
+                  textInputProps={{
+                    placeholder: 'Select box profile',
+                    placeholderTextColor: '#000',
+                    value: box?.boxProfile?.profileName || '',
+                    style: { color: '#000' },
+                  }}
+                  containerStyle={{ elevation: 0, backgroundColor: '#fff', height: 60 }}
+                  inputContainerStyle={{
+                    borderWidth: 0.8,
+                    borderColor: '#7D94EF',
+                    paddingHorizontal: 10,
+                    borderRadius: 8,
+                    backgroundColor: '#fff',
+                  }}
+                  suggestionsListContainerStyle={{
+                    borderWidth: 0.8,
+                    borderColor: '#7D94EF',
+                    height: 205,
+                  }}
+                  renderItem={(item: any) => (
+                    <Text key={item.id} style={{ color: '#000', padding: 15 }}>
+                      {item?.boxProfile?.profileName}
+                    </Text>
+                  )}
+                  onSelectItem={(item: any) => {
+                    if (item?.boxProfile?.profileName === 'customize_profile') {
+                      setCustomizeBox(true);
+                      setBox(item);
+                    } else {
+                      setCustomizeBox(false);
+                      setBox(item);
+                    }
+                  }}
+                />
+              ) : (
+                <View className="mt-2 rounded-md border border-[#1a50db] p-3">
+                  <View className="flex-row items-center justify-end gap-16 pr-4">
+                    <Text className="text-[16px] font-semibold text-[#1a50db]">Min</Text>
+                    <Text className="text-[16px] font-semibold text-[#1a50db]">Max</Text>
+                  </View>
+
+                  <View className="mt-3 flex-row items-center justify-between">
+                    <Text className="text-[16px] text-[#444]">Temperature</Text>
+                    <View className="w-2/3 flex-row items-center justify-between">
+                      <Counter value={tempMin} setValue={setTempMin} />
+                      <Counter value={tempMax} setValue={setTempMax} />
+                    </View>
+                  </View>
+
+                  <View className="mt-3 flex-row items-center justify-between">
+                    <Text className="text-[16px] text-[#444]">Humidity</Text>
+                    <View className="w-2/3 flex-row items-center justify-between">
+                      <Counter value={humMin} setValue={setHumMin} />
+                      <Counter value={humMax} setValue={setHumMax} />
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    className="self-end pt-2"
+                    onPress={() => {
+                      setCustomizeBox(false);
+                      setBox('');
+                      setHumMax(0);
+                      setHumMin(0);
+                      setTempMax(0);
+                      setTempMin(0);
+                    }}>
+                    <Text className="text-center font-bold text-[#1a50db]">Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {errors.box ? (
+                <Text className="ml-1 mt-1 text-[12px] text-red-600">{errors.box}</Text>
+              ) : null}
+              {errors.temp ? (
+                <Text className="ml-1 mt-1 text-[12px] text-red-600">{errors.temp}</Text>
+              ) : null}
+              {errors.humidity ? (
+                <Text className="ml-1 mt-1 text-[12px] text-red-600">{errors.humidity}</Text>
+              ) : null}
+
+              {/* Location */}
+              <Text className="mt-3 text-sm font-medium text-black">Location:</Text>
+              <View className="mt-1 flex-row items-center">
+                <TextInput
+                  className="flex-1 rounded-md border border-[#7D94EF] bg-white p-3 text-black"
+                  style={{ height: location === '' ? 60 : undefined }}
+                  value={location}
+                  editable={false}
+                  placeholder="Current Location"
+                  placeholderTextColor="#000"
+                  selection={{ start: 0, end: 0 }}
+                  multiline
+                />
+                <TouchableOpacity
+                  className="absolute right-3 h-8 w-8 items-center justify-center rounded-md"
+                  onPress={fetchLocation}>
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#1a50db" />
+                  ) : (
+                    <MaterialIcons name="my-location" size={24} color="#1a50db" />
+                  )}
+                </TouchableOpacity>
+              </View>
+              {errors.location ? (
+                <Text className="ml-1 mt-1 text-[12px] text-red-600">{errors.location}</Text>
+              ) : null}
+
+              {/* Trip Name */}
+              <Text className="mt-3 text-sm font-medium text-black">Trip Name:</Text>
+              <View className="mt-1 flex-row items-center">
+                <TextInput
+                  className="h-[60px] flex-1 rounded-md border border-[#7D94EF] bg-white p-3 text-black"
+                  value={tripName}
+                  onChangeText={setTripName}
+                  editable={false}
+                  selection={{ start: 0, end: 0 }}
+                />
+              </View>
+              {errors.tripName ? (
+                <Text className="ml-1 mt-1 text-[12px] text-red-600">{errors.tripName}</Text>
+              ) : null}
+            </View>
+          ) : (
+            // Started view
+            <View>
+              <Text className="mt-3 text-sm font-medium text-black">Customer Profile:</Text>
+              <TextInput
+                className="mt-1 h-[60px] flex-1 rounded-md border border-[#7D94EF] bg-white p-3 text-black"
+                value={
+                  allTrips?.[0]?.tripConfig?.customerProfile &&
+                  typeof allTrips[0].tripConfig.customerProfile === 'object'
+                    ? allTrips[0].tripConfig.customerProfile.profileName || ''
+                    : ''
+                }
+                editable={false}
+                selection={{ start: 0, end: 0 }}
+              />
+
+              <Text className="mt-3 text-sm font-medium text-black">Box Profile:</Text>
+              <TextInput
+                className="mt-1 h-[60px] flex-1 rounded-md border border-[#7D94EF] bg-white p-3 text-black"
+                value={
+                  allTrips?.[0]?.tripConfig?.boxProfile &&
+                  typeof allTrips[0].tripConfig.boxProfile === 'object'
+                    ? allTrips[0].tripConfig.boxProfile.profileName || ''
+                    : ''
+                }
+                editable={false}
+                selection={{ start: 0, end: 0 }}
+              />
+
+              <Text className="mt-3 text-sm font-medium text-black">Location:</Text>
+              <View className="mt-1 flex-row items-center">
+                <TextInput
+                  className="flex-1 rounded-md border border-[#7D94EF] bg-white p-3 text-black"
+                  style={{ height: location === '' ? 60 : undefined }}
+                  value={location}
+                  editable={false}
+                  placeholder="Current Location"
+                  placeholderTextColor="#000"
+                  selection={{ start: 0, end: 0 }}
+                  multiline
+                />
+                <TouchableOpacity
+                  className="absolute right-3 h-8 w-8 items-center justify-center rounded-md"
+                  onPress={fetchLocation}>
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#1a50db" />
+                  ) : (
+                    <MaterialIcons name="my-location" size={24} color="#1a50db" />
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <Text className="mt-3 text-sm font-medium text-black">Trip Name:</Text>
+              <TextInput
+                className="mt-1 h-[60px] flex-1 rounded-md border border-[#7D94EF] bg-white p-3 text-black"
+                value={allTrips?.[0]?.tripName || ''}
+                editable={false}
+                selection={{ start: 0, end: 0 }}
+              />
+            </View>
+          )}
+
+          {/* Submit */}
+          <View className="items-center py-5">
+            <TouchableOpacity
+              disabled={location === ''}
+              onPress={statusTrip === 0 ? handleStartTrip : handleStopTrip}
+              className={`h-[56px] w-1/2 items-center justify-center rounded-full ${
+                location === '' ? 'bg-gray-300' : 'bg-[#1a50db]'
+              }`}>
+              <Text
+                className={`text-center text-base font-semibold ${location === '' ? 'text-gray-600' : 'text-white'}`}>
+                {statusTrip === 0 ? 'Start' : 'Stop'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        <LoaderModal visible={apiLoading} />
+        <StatusModal
+          visible={modelLoader}
+          type={modalType}
+          message={
+            statusTrip === 0 ? `${deviceName} Sensor Started` : `${deviceName} Sensor Stopped`
+          }
+          subMessage={
+            statusTrip === 0
+              ? 'Your device is now recording data. All set!'
+              : 'The device has been turned off. Data capture has ended.'
+          }
+          onClose={() => setModelLoader(false)}
+        />
+      </SafeAreaView>
+    </AutocompleteDropdownContextProvider>
   );
 }

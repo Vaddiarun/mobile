@@ -1,0 +1,29 @@
+[
+    {
+        "id": "1",
+        "name": "Box Profile 1",
+        "email": "",
+        "minTemp": 0,
+        "maxTemp": 0,
+        "minHumdity": 0,
+        "maxHumidity": 0
+    },
+    {
+        "id": "2",
+        "name": "Box Profile 2",
+        "email": "",
+        "minTemp": 0,
+        "maxTemp": 0,
+        "minHumdity": 0,
+        "maxHumidity": 0
+    },
+    {
+        "id": "3",
+        "name": "Box Profile 3",
+        "email": "",
+        "minTemp": 0,
+        "maxTemp": 0,
+        "minHumdity": 0,
+        "maxHumidity": 0
+    }
+]
