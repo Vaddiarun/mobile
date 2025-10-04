@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "my-expo-app",
+    "name": "thinxlog",
     "slug": "my-expo-app",
     "version": "1.0.0",
     "web": {
@@ -9,13 +9,7 @@
     "experiments": {
       "tsconfigPaths": true
     },
-    "plugins": [
-      "expo-router",
-      "expo-asset",
-      "expo-barcode-scanner",
-      "react-native-ble-plx",
-      "react-native-vision-camera"
-    ],
+    "plugins": ["expo-router", "expo-asset", "react-native-ble-plx", "react-native-vision-camera"],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -24,9 +18,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "infoPlist": {

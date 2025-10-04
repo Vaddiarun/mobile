@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   Alert,
   PermissionsAndroid,
@@ -11,12 +11,15 @@ import {
 import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import BluetoothStateManager, { useBluetoothState } from 'react-native-bluetooth-state-manager';
+// import BluetoothStateManager, { useBluetoothState } from 'react-native-bluetooth-state-manager';
+import * as IntentLauncher from 'expo-intent-launcher';
+import { BleManager, State as BleState } from 'react-native-ble-plx';
+
+const ble = new BleManager();
 
 export default function QRScanner() {
   const router = useRouter();
-  const device = useCameraDevice('back'); // current API
-  const btState = useBluetoothState();
+  const device = useCameraDevice('back');
   const [isScanning, setIsScanning] = useState(false);
 
   // permissions: camera + Android BLE runtime
@@ -47,23 +50,35 @@ export default function QRScanner() {
   }, []);
 
   // prompt to enable BT if off
+  // useEffect(() => {
+  //   if (btState === 'PoweredOff') {
+  //     // Android-only prompt to enable BT
+  //     BluetoothStateManager.requestToEnable();
+  //   }
+  // }, [btState]);
   useEffect(() => {
-    if (btState === 'PoweredOff') {
-      // Android-only prompt to enable BT
-      BluetoothStateManager.requestToEnable();
-    }
-  }, [btState]);
+    (async () => {
+      try {
+        const s: BleState = await ble.state();
+        if (s !== 'PoweredOn' && Platform.OS === 'android') {
+          await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.BLUETOOTH_SETTINGS);
+        }
+      } catch {}
+    })();
+  }, []);
 
   const onScanned = useCallback(
-    (value: string) => {
-      if (btState !== 'PoweredOn') {
+    async (value: string) => {
+      // ensure BT is on
+      const s: BleState = await ble.state();
+      if (s !== 'PoweredOn') {
         Alert.alert('Bluetooth needed', 'Enable Bluetooth and Location first.');
         return;
       }
       setIsScanning(true);
       router.push({ pathname: '/bluetooth-communication', params: { qrCode: value } });
     },
-    [btState, router]
+    [router]
   );
 
   const codeScanner = useCodeScanner({
@@ -78,7 +93,7 @@ export default function QRScanner() {
     <View className="flex-1 bg-black">
       {device && (
         <Camera
-          style={{ ...StyleSheet.absoluteFillObject }}
+          style={StyleSheet.absoluteFill}
           device={device}
           isActive={!isScanning}
           codeScanner={!isScanning ? codeScanner : undefined}
