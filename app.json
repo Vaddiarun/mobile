@@ -9,7 +9,12 @@
     "experiments": {
       "tsconfigPaths": true
     },
-    "plugins": ["expo-router", "expo-asset", "react-native-ble-plx", "react-native-vision-camera"],
+    "plugins": [
+      "expo-router",
+      "expo-asset",
+      "react-native-ble-plx",
+      "react-native-vision-camera"
+    ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -18,7 +23,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -37,15 +44,15 @@
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.BLUETOOTH",
-        "android.permission.BLUETOOTH_ADMIN",
-        "android.permission.CAMERA",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.BLUETOOTH_SCAN",
-        "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN"
       ],
       "package": "com.termi007xt.myexpoapp"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "35a628a8-144b-4c15-bfd6-2ed276a39b34"
+      }
     }
   }
 }

@@ -17,6 +17,7 @@
     "expo": "^54.0.12",
     "expo-asset": "~12.0.9",
     "expo-camera": "~17.0.8",
+    "expo-dev-client": "~6.0.13",
     "expo-image": "~3.0.8",
     "expo-intent-launcher": "~13.0.7",
     "expo-linear-gradient": "^15.0.7",

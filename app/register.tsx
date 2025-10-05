@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable, Image } from 'react-native';
+import { View, Text, TextInput, Pressable, Image, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
+import { BASE_URL } from '../services/apiClient';
+import { EndPoints } from '../services/endPoints';
 
 export default function Register() {
   const router = useRouter();
@@ -37,11 +39,27 @@ export default function Register() {
 
     setLoading(true);
     try {
-      // Example request — update with your API
-      await axios.post('https://yourapi.com/register', { username: name, email, phone: mobile });
-      router.push({ pathname: '/verifyotp', params: { name, email, phone: mobile } });
-    } catch (e) {
-      console.log(e);
+      const formattedPhone = mobile.startsWith('+') ? mobile : `+91${mobile}`;
+      await axios.post(`${BASE_URL}/${EndPoints.REGISTER}`, {
+        username: name,
+        email,
+        phone: formattedPhone,
+      });
+
+      Alert.alert('Thinxlog', 'OTP sent to your mobile number. Check your phone.', [
+        {
+          text: 'OK',
+          onPress: () =>
+            router.push({ pathname: '/verifyotp', params: { name, email, phone: mobile } }),
+        },
+      ]);
+    } catch (e: any) {
+      if (axios.isAxiosError(e)) {
+        console.log('Register error:', e.response?.data || e.message);
+        Alert.alert('Error', e.response?.data?.message || 'Registration failed');
+      } else {
+        Alert.alert('Error', 'Something went wrong');
+      }
     } finally {
       setLoading(false);
     }
@@ -99,8 +117,10 @@ export default function Register() {
       ))}
 
       <Pressable
-        onPress={handleSubmit}
-        className="mt-4 w-1/2 items-center self-center rounded-full bg-blue-600 py-3">
+        onPress={!loading ? handleSubmit : undefined}
+        className={`mt-4 w-1/2 items-center self-center rounded-full ${
+          loading ? 'bg-gray-400' : 'bg-blue-600'
+        } py-3`}>
         <Text className="text-base font-semibold text-white">
           {loading ? 'Loading...' : 'Register'}
         </Text>

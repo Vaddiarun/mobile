@@ -2,14 +2,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput as RNTextInput, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import axios from 'axios';
+import { BASE_URL } from '../services/apiClient';
+import { EndPoints } from '../services/endPoints';
 
 export default function VerifyOTP() {
   const router = useRouter();
   const { name, email, phone } = useLocalSearchParams();
+
   const [otp, setOtp] = useState(Array(6).fill(''));
   const inputs = useRef<(RNTextInput | null)[]>([]);
   const [error, setError] = useState('');
-  const [timer, setTimer] = useState(60);
+  const [timer, setTimer] = useState(300); // use longer time for safety
 
   useEffect(() => {
     const interval = setInterval(() => setTimer((prev) => Math.max(prev - 1, 0)), 1000);
@@ -17,23 +20,73 @@ export default function VerifyOTP() {
   }, []);
 
   const handleChange = (text: string, i: number) => {
-    const newOtp = [...otp];
-    newOtp[i] = text;
-    setOtp(newOtp);
-    if (text && i < 5) inputs.current[i + 1]?.focus();
+    if (/^[a-zA-Z0-9]+$/.test(text) || text === '') {
+      const newOtp = [...otp];
+      if (text.length > 1) {
+        const chars = text.split('').slice(0, 6);
+        chars.forEach((c, idx) => (newOtp[idx] = c));
+        setOtp(newOtp);
+        if (chars.length < 6) inputs.current[chars.length]?.focus();
+        else inputs.current[5]?.blur();
+      } else {
+        newOtp[i] = text;
+        setOtp(newOtp);
+        if (text && i < 5) inputs.current[i + 1]?.focus();
+      }
+      setError('');
+    } else {
+      setError('Enter letters & numbers only');
+    }
+  };
+
+  const handleKeyPress = (e: any, i: number) => {
+    if (e.nativeEvent.key === 'Backspace' && !otp[i] && i > 0) {
+      const newOtp = [...otp];
+      newOtp[i - 1] = '';
+      setOtp(newOtp);
+      inputs.current[i - 1]?.focus();
+    }
   };
 
   const handleVerify = async () => {
-    const enteredOtp = otp.join('');
-    if (enteredOtp.length < 6) {
+    const entered = otp.join('');
+    if (entered.length < 6) {
       setError('Enter 6-digit OTP');
       return;
     }
+
     try {
-      await axios.post('https://yourapi.com/verify', { phone, otp: enteredOtp });
-      router.replace('/(tabs)');
-    } catch {
+      const res = await axios.post(`${BASE_URL}/${EndPoints.OTP_VERIFY}`, {
+        phone: `+91${phone}`, // ✅ E.164 fix
+        otp: entered,
+      });
+
+      if (res.data) {
+        router.replace('/(tabs)');
+      } else {
+        setError('OTP verification failed');
+      }
+    } catch (err: any) {
+      console.log('❌ OTP verify error:', err.response?.data || err.message);
       setError('Invalid or expired OTP');
+    }
+  };
+
+  const handleResend = async () => {
+    try {
+      const res = await axios.post(`${BASE_URL}/${EndPoints.REGISTER}`, {
+        username: name,
+        email,
+        phone: `+91${phone}`, // ✅ Fixed here too
+      });
+
+      console.log('🔄 Resend response:', res.data);
+      setOtp(Array(6).fill(''));
+      setTimer(300);
+      setError('');
+    } catch (e: any) {
+      console.log('❌ Resend error:', e.response?.data || e.message);
+      setError('Failed to resend OTP');
     }
   };
 
@@ -46,14 +99,13 @@ export default function VerifyOTP() {
         {otp.map((d, i) => (
           <RNTextInput
             key={i}
-            ref={(r) => {
-              inputs.current[i] = r;
-            }}
+            ref={(r) => (inputs.current[i] = r)}
             className="h-12 w-12 rounded-xl border border-blue-400 text-center text-lg text-gray-800"
             value={d}
             onChangeText={(t) => handleChange(t, i)}
-            keyboardType="number-pad"
+            keyboardType="default"
             maxLength={1}
+            onKeyPress={(e) => handleKeyPress(e, i)}
           />
         ))}
       </View>
@@ -66,7 +118,7 @@ export default function VerifyOTP() {
         <Text className="text-center font-semibold text-white">Verify</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity disabled={timer > 0} onPress={() => setTimer(60)} className="mt-4">
+      <TouchableOpacity disabled={timer > 0} onPress={handleResend} className="mt-4">
         <Text
           className={`text-center font-medium ${timer > 0 ? 'text-gray-400' : 'text-blue-600'}`}>
           {timer > 0 ? `Resend OTP in ${timer}s` : 'Resend OTP'}
