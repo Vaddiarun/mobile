@@ -1,7 +1,9 @@
 {
   "expo": {
     "name": "thinxlog",
+    "scheme": "thinxlog",
     "slug": "my-expo-app",
+    "deepLinks": ["thinxlog://"],
     "version": "1.0.0",
     "web": {
       "favicon": "./assets/favicon.png"
@@ -9,12 +11,7 @@
     "experiments": {
       "tsconfigPaths": true
     },
-    "plugins": [
-      "expo-router",
-      "expo-asset",
-      "react-native-ble-plx",
-      "react-native-vision-camera"
-    ],
+    "plugins": ["expo-router", "expo-asset", "react-native-ble-plx", "react-native-vision-camera"],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -23,9 +20,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -35,7 +30,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/images/noti-logo.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
