@@ -76,12 +76,7 @@ export default function TripConfiguration() {
   const [humMax, setHumMax] = useState(0);
   const [modelLoader, setModelLoader] = useState(false);
   const [stopLat, setStopLong] = useState({ latitude: 0, longitude: 0 });
-
   const [modalType, setModalType] = useState<'success' | 'error' | 'warning' | 'info'>('success');
-  setModalType('success');
-  setModelLoader(true);
-
-  let type: 'success' | 'error' | 'warning' | 'info' | null;
 
   const user = getUser();
 
@@ -263,7 +258,7 @@ export default function TripConfiguration() {
       })
       .then(() => {
         saveTrip(body);
-        type = 'success';
+        setModalType('success');
         setModelLoader(true);
         handleReset();
       })
@@ -305,7 +300,7 @@ export default function TripConfiguration() {
         },
       })
       .then(() => {
-        type = 'success';
+        setModalType('success');
         setModelLoader(true);
         handleReset2();
       })

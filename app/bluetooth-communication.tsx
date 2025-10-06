@@ -20,6 +20,12 @@ export default function BluetoothCommunication() {
   const [devices, setDevices] = useState<any[]>([]);
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(false);
+  const tripOperationRef = useRef<'IDLE' | 'START' | 'STOP'>('IDLE');
+  const dataRef = useRef<any>({});
+  const packetsArrayRef = useRef<any[]>([]);
+  const receivedPacketsCountRef = useRef<any>({});
+  const connectedDeviceRef = useRef<Device | null>(null);
+  const monitorSubscriptionRef = useRef<any>(null);
 
   // rotation animation
   useEffect(() => {
@@ -53,11 +59,14 @@ export default function BluetoothCommunication() {
     scanAndConnect();
 
     return () => {
-      // stop device scan and clear interval exactly once
       bleManager.stopDeviceScan();
       if (scanIntervalRef.current) {
         clearTimeout(scanIntervalRef.current);
         scanIntervalRef.current = null;
+      }
+      if (monitorSubscriptionRef.current) {
+        monitorSubscriptionRef.current.remove();
+        monitorSubscriptionRef.current = null;
       }
       setScaning(false);
       mountedRef.current = false;
@@ -95,6 +104,7 @@ export default function BluetoothCommunication() {
           setScaning(false);
 
           const connectedDevice = await device.connect();
+          connectedDeviceRef.current = connectedDevice;
           await connectedDevice.discoverAllServicesAndCharacteristics();
           await connectedDevice.requestMTU(241);
           const services = await connectedDevice.services();
@@ -105,7 +115,7 @@ export default function BluetoothCommunication() {
           const rxChar = chars.find((c) => c.isWritableWithResponse);
 
           if (txChar?.uuid && rxChar?.uuid) {
-            startPacket(device, service.uuid, txChar.uuid, rxChar.uuid);
+            startPacket(connectedDevice, service.uuid, txChar.uuid, rxChar.uuid);
           } else {
             setLoading(false);
             setScaning(false);
@@ -295,11 +305,6 @@ export default function BluetoothCommunication() {
     return { packetType, payloadLength, deviceId, reserved: reserved.toString('hex') };
   }
 
-  let tripOperation: 'IDLE' | 'START' | 'STOP' = 'IDLE';
-  let data: any = {};
-  let packetsArray: any[] = [];
-  let receivedPacketsCount: any = {};
-
   async function handlePacket(
     rawData: Buffer,
     device: Device,
@@ -313,40 +318,50 @@ export default function BluetoothCommunication() {
 
     switch (packetType) {
       case 0xd1:
-        tripOperation = parsed.tripStatus === 0 ? 'START' : 'STOP';
+        tripOperationRef.current = parsed.tripStatus === 0 ? 'START' : 'STOP';
         await sendTimeResponse(device, 'TF900001', serviceUUID, rxUUID);
         break;
 
       case 0xd2:
-        if (tripOperation === 'START') {
+        if (tripOperationRef.current === 'START') {
           const config = buildA3Packet(10, true).toString('base64');
           await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, config);
-        } else if (tripOperation === 'STOP') {
+
+          router.replace({
+            pathname: '/trip-configuration',
+            params: {
+              packets: JSON.stringify(dataRef.current),
+              tripStatus: 0,
+              deviceName: qrCode ?? '',
+              packetsCount: JSON.stringify(receivedPacketsCountRef.current),
+            },
+          });
+        } else if (tripOperationRef.current === 'STOP') {
           await sendDataRequest(device.id, serviceUUID, rxUUID);
         }
         break;
 
       case 0xd4:
-        if (tripOperation === 'STOP') {
+        if (tripOperationRef.current === 'STOP') {
           const res = parseD4Packet(b64);
-          receivedPacketsCount = { expected: res };
+          receivedPacketsCountRef.current = { expected: res };
           const ack = buildA5DataAck();
           await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, ack);
         }
         break;
 
       case 0xd5:
-        if (tripOperation === 'STOP') {
+        if (tripOperationRef.current === 'STOP') {
           const res = parseD5DataPacket(b64);
           const ack = buildA5DataAck();
           await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, ack);
-          packetsArray = [...packetsArray, ...res.packets];
-          data = { ...data, allData: res, packets: packetsArray };
+          packetsArrayRef.current = [...packetsArrayRef.current, ...res.packets];
+          dataRef.current = { ...dataRef.current, allData: res, packets: packetsArrayRef.current };
         }
         break;
 
       case 0xd6:
-        if (tripOperation === 'STOP') {
+        if (tripOperationRef.current === 'STOP') {
           const ack = buildA5DataAck();
           const ok = await device.writeCharacteristicWithResponseForService(
             serviceUUID,
@@ -356,33 +371,34 @@ export default function BluetoothCommunication() {
           if (ok) {
             const stop = buildA3Packet(10, false).toString('base64');
             await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, stop);
-            tripOperation = 'IDLE';
+            tripOperationRef.current = 'IDLE';
+
+            router.replace({
+              pathname: '/trip-configuration',
+              params: {
+                packets: JSON.stringify(dataRef.current),
+                tripStatus: 1,
+                deviceName: qrCode ?? '',
+                packetsCount: JSON.stringify(receivedPacketsCountRef.current),
+              },
+            });
+
+            await bleManager.cancelDeviceConnection(device.id);
           }
         }
         break;
-
-      default:
-        router.replace({
-          pathname: '/trip-configuration',
-          params: {
-            packets: JSON.stringify(data),
-            tripStatus: tripOperation === 'START' ? 0 : 1,
-            deviceName: qrCode ?? '',
-            packetsCount: JSON.stringify(receivedPacketsCount),
-          },
-        });
-        if (tripOperation === 'START') {
-          await bleManager.cancelDeviceConnection(device.id);
-        }
     }
   }
 
   function startPacket(device: Device, serviceUUID: string, txUUID: string, rxUUID: string) {
-    device.monitorCharacteristicForService(
+    monitorSubscriptionRef.current = device.monitorCharacteristicForService(
       serviceUUID.toLowerCase(),
       txUUID.toLowerCase(),
       async (error, characteristic) => {
-        if (error) return;
+        if (error) {
+          console.log('Monitor error:', error);
+          return;
+        }
         if (characteristic?.value) {
           const raw = Buffer.from(characteristic.value, 'base64');
           handlePacket(raw, device, serviceUUID, txUUID, rxUUID);

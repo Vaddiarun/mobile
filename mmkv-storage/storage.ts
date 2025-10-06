@@ -19,11 +19,9 @@ export const clearUser = () => {
   storage.delete("user");
 };
 
-export const saveTrip = (user: any) => {
-  let trips = [];
-  const data = { ...user, user };
-  trips.push(data);
-
+export const saveTrip = (tripData: any) => {
+  const existingTrips = getTrips() || [];
+  const trips = [...existingTrips, tripData];
   storage.set("trips", JSON.stringify(trips));
 };
 
