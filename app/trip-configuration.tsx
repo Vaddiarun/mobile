@@ -356,7 +356,7 @@ export default function TripConfiguration() {
     setTempMin(0);
     setHumMax(0);
     setHumMin(0);
-    router.replace('/(tabs)/index');
+    router.replace('/(tabs)');
   };
 
   const handleReset2 = () => {
@@ -456,6 +456,8 @@ export default function TripConfiguration() {
     console.log('  Device Name:', deviceName);
     console.log('  Total Packets:', actualTotalPackets);
     console.log('  Actual Data Packets:', actualPackets.length);
+    console.log('  Packets Data:', JSON.stringify(actualPackets, null, 2)); // Pretty print
+
     console.log('  Token:', user?.data?.token ? `${user.data.token.substring(0, 20)}...` : 'none');
 
     setApiLoading(true);

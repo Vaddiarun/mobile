@@ -363,7 +363,15 @@ export default function BluetoothCommunication() {
           if (tripOperationRef.current === 'START') {
             const config = buildA3Packet(10, true).toString('base64');
             await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, config);
-            console.log('Navigating to trip configuration - START');
+            console.log('Trip started on device, waiting for confirmation...');
+
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
+            await bleManager.cancelDeviceConnection(device.id);
+            console.log(
+              'Disconnected from device - it will continue recording and stay in fast advertising mode'
+            );
+
             hasNavigatedRef.current = true;
 
             router.replace({
