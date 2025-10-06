@@ -8,8 +8,8 @@ export default function Splash() {
   const router = useRouter();
 
   useEffect(() => {
-    // const t = setTimeout(() => router.replace('/login'), 1000);
-    const t = setTimeout(() => router.replace('/(tabs)'), 1000);
+    const t = setTimeout(() => router.replace('/login'), 1000);
+    // const t = setTimeout(() => router.replace('/(tabs)'), 1000);
     return () => clearTimeout(t);
   }, []);
 

@@ -106,12 +106,18 @@ export default function QRScanner() {
   const onScanned = useCallback(
     async (value: string) => {
       try {
+        if (!value || value.trim() === '') {
+          Alert.alert('Invalid QR Code', 'Please scan a valid device QR code.');
+          return;
+        }
+
         const s: BleState = await ble.state();
         if (s !== 'PoweredOn') {
           Alert.alert('Bluetooth Required', 'Enable Bluetooth and Location first.');
           return;
         }
         setIsScanning(true);
+        console.log('QR Code scanned, navigating with device:', value);
         // navigate to bluetooth screen
         router.push({
           pathname: '/bluetooth-communication',

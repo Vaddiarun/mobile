@@ -207,9 +207,13 @@ export default function TripConfiguration() {
   const getProfiles = async (token: string) => {
     if (!deviceName) {
       console.error('No deviceName available for getProfiles');
-      Alert.alert('Configuration Error', 'Device name is missing. Please scan the QR code again.', [
-        { text: 'OK', onPress: () => router.replace('/(tabs)/qr-scanner') },
-      ]);
+      setTimeout(() => {
+        Alert.alert(
+          'Configuration Error',
+          'Device name is missing. Please scan the QR code again.',
+          [{ text: 'OK', onPress: () => router.replace('/(tabs)/qr-scanner') }]
+        );
+      }, 500);
       return;
     }
 
@@ -217,7 +221,7 @@ export default function TripConfiguration() {
     try {
       const res = await axios.get(
         `${BASE_URL}/${EndPoints.GET_CUSTOMER_BOX_PROFILES}?deviceID=${deviceName}`,
-        { headers: { Authorization: `Bearer ${token || 'dev-token'}` } }
+        { headers: { Authorization: `Bearer ${token || 'dev-token'}` }, timeout: 10000 }
       );
       const boxList: any[] = res?.data?.data?.boxProfiles ?? [];
       const customized = [...boxList, { boxProfile: customizeProfile }];
@@ -229,7 +233,34 @@ export default function TripConfiguration() {
       });
     } catch (e: any) {
       console.error('Error loading profiles:', e?.response?.data || e?.message || e);
-      console.log('Using development mode - profiles may not load from API');
+      console.log('Using development mode - loading default profiles');
+
+      const defaultCustomerProfile = {
+        id: 'default-customer',
+        customerProfile: {
+          profileName: 'Default Customer',
+          email: user?.data?.user?.Email || 'dev@test.com',
+          phone: user?.data?.user?.Phone || '1234567890',
+        },
+      };
+
+      const defaultBoxProfile = {
+        id: 'default-box',
+        boxProfile: {
+          profileName: 'Default Box',
+          minTemp: -20,
+          maxTemp: 60,
+          minHum: 10,
+          maxHum: 90,
+        },
+      };
+
+      setProfilesData({
+        customerProfiles: [defaultCustomerProfile],
+        boxProfiles: [defaultBoxProfile],
+      });
+      setBoxProfiles([defaultBoxProfile, { boxProfile: customizeProfile }]);
+      console.log('Default profiles loaded for development mode');
     } finally {
       setApiLoading(false);
     }
@@ -245,9 +276,13 @@ export default function TripConfiguration() {
   useEffect(() => {
     if (!deviceName) {
       console.error('No deviceName provided');
-      Alert.alert('Configuration Error', 'Device name is missing. Please scan the QR code again.', [
-        { text: 'OK', onPress: () => router.replace('/(tabs)/qr-scanner') },
-      ]);
+      setTimeout(() => {
+        Alert.alert(
+          'Configuration Error',
+          'Device name is missing. Please scan the QR code again.',
+          [{ text: 'OK', onPress: () => router.replace('/(tabs)/qr-scanner') }]
+        );
+      }, 500);
       return;
     }
 

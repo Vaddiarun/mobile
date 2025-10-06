@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Animated, Easing } from 'react-native';
+import { View, Animated, Easing, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { BleManager, Device } from 'react-native-ble-plx';
 import { Buffer } from 'buffer';
@@ -13,12 +13,21 @@ export default function BluetoothCommunication() {
   const { qrCode } = useLocalSearchParams<{ qrCode?: string }>();
   const router = useRouter();
 
+  // Validate qrCode parameter
+  React.useEffect(() => {
+    if (!qrCode) {
+      console.error('No QR code provided to BluetoothCommunication');
+      Alert.alert('Error', 'No device code provided. Please scan QR code again.', [
+        { text: 'OK', onPress: () => router.replace('/(tabs)/qr-scanner') },
+      ]);
+    }
+  }, [qrCode]);
+
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const [loading, setLoading] = useState(false);
   const [modelLoader, setModelLoader] = useState(false);
   const [scaning, setScaning] = useState(false);
   const [devices, setDevices] = useState<any[]>([]);
-  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(false);
   const deviceFoundRef = useRef(false);
   const tripOperationRef = useRef<'IDLE' | 'START' | 'STOP'>('IDLE');
@@ -27,6 +36,7 @@ export default function BluetoothCommunication() {
   const receivedPacketsCountRef = useRef<any>({});
   const connectedDeviceRef = useRef<Device | null>(null);
   const monitorSubscriptionRef = useRef<any>(null);
+  const hasNavigatedRef = useRef(false);
 
   // rotation animation
   useEffect(() => {
@@ -61,11 +71,7 @@ export default function BluetoothCommunication() {
 
     return () => {
       bleManager.stopDeviceScan();
-      if (scanIntervalRef.current) {
-        clearTimeout(scanIntervalRef.current);
-        scanIntervalRef.current = null;
-      }
-      if (monitorSubscriptionRef.current) {
+      if (monitorSubscriptionRef.current && !hasNavigatedRef.current) {
         monitorSubscriptionRef.current.remove();
         monitorSubscriptionRef.current = null;
       }
@@ -78,11 +84,6 @@ export default function BluetoothCommunication() {
     if (scaning) return;
 
     bleManager.stopDeviceScan();
-    if (scanIntervalRef.current) {
-      clearTimeout(scanIntervalRef.current);
-      scanIntervalRef.current = null;
-    }
-
     deviceFoundRef.current = false;
     setScaning(true);
 
@@ -96,6 +97,7 @@ export default function BluetoothCommunication() {
           if (!deviceFoundRef.current) {
             setLoading(false);
             setScaning(false);
+            setModelLoader(true);
           }
           return;
         }
@@ -105,10 +107,6 @@ export default function BluetoothCommunication() {
           deviceFoundRef.current = true;
 
           bleManager.stopDeviceScan();
-          if (scanIntervalRef.current) {
-            clearTimeout(scanIntervalRef.current);
-            scanIntervalRef.current = null;
-          }
           setScaning(false);
 
           try {
@@ -146,19 +144,6 @@ export default function BluetoothCommunication() {
           }
         }
       });
-
-      scanIntervalRef.current = setTimeout(() => {
-        if (!deviceFoundRef.current) {
-          console.log('Scan timeout - device not found');
-          bleManager.stopDeviceScan();
-          setLoading(false);
-          setScaning(false);
-          setModelLoader(true);
-        } else {
-          console.log('Timeout skipped - device is connecting');
-        }
-        scanIntervalRef.current = null;
-      }, 10000);
     } catch (e) {
       console.error('Scan initialization error:', e);
       setLoading(false);
@@ -368,6 +353,7 @@ export default function BluetoothCommunication() {
             const config = buildA3Packet(10, true).toString('base64');
             await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, config);
             console.log('Navigating to trip configuration - START');
+            hasNavigatedRef.current = true;
 
             router.replace({
               pathname: '/trip-configuration',
@@ -425,6 +411,7 @@ export default function BluetoothCommunication() {
                 packetsArrayRef.current.length
               );
               console.log('Trip data collected:', JSON.stringify(dataRef.current, null, 2));
+              hasNavigatedRef.current = true;
 
               router.replace({
                 pathname: '/trip-configuration',
