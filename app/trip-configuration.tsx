@@ -366,9 +366,9 @@ export default function TripConfiguration() {
     setStopLong({ latitude: 0, longitude: 0 });
     setLocation('');
     setLocationsRaw('');
-    router.replace('/(tabs)/index');
     setStatusTrip(0);
     clearTrip();
+    router.replace('/(tabs)');
   };
 
   const handleStartTrip = () => {
@@ -388,6 +388,7 @@ export default function TripConfiguration() {
           : box?.boxProfile,
     };
 
+    const tripStartTime = Date.now();
     const body = {
       username: user?.data?.user?.Username,
       email: user?.data?.user?.Email,
@@ -396,6 +397,8 @@ export default function TripConfiguration() {
       deviceID: deviceName,
       location: locationsRaw,
       tripConfig,
+      timestamp: tripStartTime,
+      createdAt: tripStartTime,
     };
 
     console.log('📡 Starting trip...');
@@ -429,8 +432,11 @@ export default function TripConfiguration() {
       return;
     }
 
-    const bufferOne = Buffer.from(JSON.stringify(packets?.packets || []));
+    const actualPackets = packets?.packets || [];
+    const bufferOne = Buffer.from(JSON.stringify(actualPackets));
     const dataString = Array.from(bufferOne).join(',');
+
+    const actualTotalPackets = packetsCount?.expected?.totalPackets ?? actualPackets.length ?? 0;
 
     const body = {
       tripName: allTrips[0]?.tripName,
@@ -438,7 +444,7 @@ export default function TripConfiguration() {
       data: dataString,
       location: stopLat,
       Battery: `${packetsCount?.expected?.batteryPercentage ?? 0}`,
-      totalPackets: 34,
+      totalPackets: actualTotalPackets,
       deviceName,
       packetType: 213,
       ...(packets?.allData?.payloadLength != null && {
@@ -448,6 +454,8 @@ export default function TripConfiguration() {
 
     console.log('📡 Stopping trip...');
     console.log('  Device Name:', deviceName);
+    console.log('  Total Packets:', actualTotalPackets);
+    console.log('  Actual Data Packets:', actualPackets.length);
     console.log('  Token:', user?.data?.token ? `${user.data.token.substring(0, 20)}...` : 'none');
 
     setApiLoading(true);

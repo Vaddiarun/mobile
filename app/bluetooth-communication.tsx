@@ -6,6 +6,7 @@ import { Buffer } from 'buffer';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import LoaderModal from '../components/LoaderModel';
 import StatusModal from '../components/StatusModel';
+import { getTrips } from '../mmkv-storage/storage';
 
 const bleManager = new BleManager();
 
@@ -338,8 +339,18 @@ export default function BluetoothCommunication() {
       switch (packetType) {
         case 0xd1:
           const parsed = parseD1Packet(b64);
-          tripOperationRef.current = parsed.tripStatus === 0 ? 'START' : 'STOP';
-          console.log('Trip operation:', tripOperationRef.current);
+
+          const allTrips = getTrips() || [];
+          const existingTrip = allTrips.find((trip: any) => trip.deviceID === qrCode);
+
+          if (existingTrip) {
+            tripOperationRef.current = 'STOP';
+            console.log('Trip operation: STOP (found existing trip in local storage)');
+          } else {
+            tripOperationRef.current = parsed.tripStatus === 0 ? 'START' : 'STOP';
+            console.log('Trip operation:', tripOperationRef.current, '(from device)');
+          }
+
           await sendTimeResponse(
             device,
             parsed.deviceId || (qrCode as string),
@@ -365,6 +376,7 @@ export default function BluetoothCommunication() {
               },
             });
           } else if (tripOperationRef.current === 'STOP') {
+            console.log('Device has active trip, requesting data from device...');
             await sendDataRequest(device.id, serviceUUID, rxUUID);
           }
           break;

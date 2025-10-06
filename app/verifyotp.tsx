@@ -130,7 +130,7 @@ export default function VerifyOTP() {
             className="h-12 w-12 rounded-xl border border-blue-400 text-center text-lg text-gray-800"
             value={d}
             onChangeText={(t) => handleChange(t, i)}
-            keyboardType="default"
+            keyboardType="number-pad"
             maxLength={1}
             onKeyPress={(e) => handleKeyPress(e, i)}
           />
