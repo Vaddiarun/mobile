@@ -8,12 +8,7 @@ type Props = {
   onClose: () => void;
 };
 
-export default function BluetoothModal({
-  visible,
-  type,
-  message,
-  onClose,
-}: Props) {
+export default function BluetoothModal({ visible, type, message, onClose }: Props) {
   const icon = {
     success: '✅',
     error: '⛔',
@@ -24,8 +19,8 @@ export default function BluetoothModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.box}>
-            <Text style={{ fontWeight: "bold"}}>G4200030</Text>
-            <ActivityIndicator size={"large"} color={"#1976D2"} />
+          <Text style={{ fontWeight: 'bold' }}>TF900001</Text>
+          <ActivityIndicator size={'large'} color={'#1976D2'} />
           <Text style={styles.message}>{message}</Text>
         </View>
       </View>
@@ -54,7 +49,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
-    gap: 10
+    gap: 10,
   },
   icon: { fontSize: 40, marginBottom: 10 },
   message: { fontSize: 16, textAlign: 'center', marginBottom: 20 },

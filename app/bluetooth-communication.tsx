@@ -314,7 +314,7 @@ export default function BluetoothCommunication() {
     switch (packetType) {
       case 0xd1:
         tripOperation = parsed.tripStatus === 0 ? 'START' : 'STOP';
-        await sendTimeResponse(device, 'G4200030', serviceUUID, rxUUID);
+        await sendTimeResponse(device, 'TF900001', serviceUUID, rxUUID);
         break;
 
       case 0xd2:
