@@ -206,7 +206,7 @@ export default function TripConfiguration() {
 
   const getProfiles = async (token: string) => {
     if (!deviceName) {
-      console.error('No deviceName available for getProfiles');
+      console.error('❌ No deviceName available for getProfiles');
       setTimeout(() => {
         Alert.alert(
           'Configuration Error',
@@ -218,22 +218,51 @@ export default function TripConfiguration() {
     }
 
     setApiLoading(true);
+    const apiUrl = `${BASE_URL}/${EndPoints.GET_CUSTOMER_BOX_PROFILES}?deviceID=${deviceName}`;
+    const authToken = token || 'dev-token';
+
+    console.log('📡 Fetching profiles...');
+    console.log('  URL:', apiUrl);
+    console.log('  Device ID:', deviceName);
+    console.log('  Token:', authToken ? `${authToken.substring(0, 20)}...` : 'none');
+
     try {
-      const res = await axios.get(
-        `${BASE_URL}/${EndPoints.GET_CUSTOMER_BOX_PROFILES}?deviceID=${deviceName}`,
-        { headers: { Authorization: `Bearer ${token || 'dev-token'}` }, timeout: 10000 }
-      );
+      const res = await axios.get(apiUrl, {
+        headers: { Authorization: `Bearer ${authToken}` },
+        timeout: 10000,
+      });
+
+      console.log('✅ Profile API Response:', {
+        status: res.status,
+        hasData: !!res.data,
+        hasCustomerProfiles: !!res.data?.data?.customerProfiles,
+        hasBoxProfiles: !!res.data?.data?.boxProfiles,
+      });
+
       const boxList: any[] = res?.data?.data?.boxProfiles ?? [];
       const customized = [...boxList, { boxProfile: customizeProfile }];
       setBoxProfiles(customized);
       setProfilesData(res.data?.data);
-      console.log('Profiles loaded successfully:', {
+      console.log('✅ Profiles loaded successfully:', {
         customerProfiles: res.data?.data?.customerProfiles?.length,
         boxProfiles: boxList.length,
       });
     } catch (e: any) {
-      console.error('Error loading profiles:', e?.response?.data || e?.message || e);
-      console.log('Using development mode - loading default profiles');
+      const errorDetails = {
+        status: e?.response?.status,
+        statusText: e?.response?.statusText,
+        message: e?.response?.data?.message || e?.message,
+        data: e?.response?.data,
+      };
+
+      console.error('❌ Error loading profiles:', errorDetails);
+
+      if (e?.response?.status === 401) {
+        console.error('❌ 401 Unauthorized - Token is invalid or expired');
+        console.error('   Token used:', authToken ? `${authToken.substring(0, 20)}...` : 'none');
+      }
+
+      console.log('⚠️ Using development mode - loading default profiles');
 
       const defaultCustomerProfile = {
         id: 'default-customer',
@@ -260,7 +289,7 @@ export default function TripConfiguration() {
         boxProfiles: [defaultBoxProfile],
       });
       setBoxProfiles([defaultBoxProfile, { boxProfile: customizeProfile }]);
-      console.log('Default profiles loaded for development mode');
+      console.log('✅ Default profiles loaded for development mode');
     } finally {
       setApiLoading(false);
     }
@@ -369,19 +398,27 @@ export default function TripConfiguration() {
       tripConfig,
     };
 
+    console.log('📡 Starting trip...');
+    console.log('  Device ID:', deviceName);
+    console.log('  Token:', user?.data?.token ? `${user.data.token.substring(0, 20)}...` : 'none');
+
     setApiLoading(true);
     axios
       .post(`${BASE_URL}/${EndPoints.START_TRIP}`, body, {
         headers: { Authorization: `Bearer ${user?.data?.token}` },
       })
-      .then(() => {
+      .then((res) => {
+        console.log('✅ Trip started successfully:', res.data);
         saveTrip(body);
         setModalType('success');
         setModelLoader(true);
-        handleReset();
       })
-      .catch(() => {
-        Alert.alert('Error', 'Something went wrong...');
+      .catch((err) => {
+        console.error('❌ Start trip error:', err?.response?.data || err?.message);
+        Alert.alert(
+          'Error',
+          err?.response?.data?.message || 'Failed to start trip. Please try again.'
+        );
       })
       .finally(() => setApiLoading(false));
   };
@@ -409,6 +446,10 @@ export default function TripConfiguration() {
       }),
     };
 
+    console.log('📡 Stopping trip...');
+    console.log('  Device Name:', deviceName);
+    console.log('  Token:', user?.data?.token ? `${user.data.token.substring(0, 20)}...` : 'none');
+
     setApiLoading(true);
     axios
       .post(`${BASE_URL}/${EndPoints.STOP_TRIP}`, body, {
@@ -417,13 +458,17 @@ export default function TripConfiguration() {
           'Content-Type': 'application/json',
         },
       })
-      .then(() => {
+      .then((res) => {
+        console.log('✅ Trip stopped successfully:', res.data);
         setModalType('success');
         setModelLoader(true);
-        handleReset2();
       })
-      .catch(() => {
-        Alert.alert('Error', 'Something went wrong...');
+      .catch((err) => {
+        console.error('❌ Stop trip error:', err?.response?.data || err?.message);
+        Alert.alert(
+          'Error',
+          err?.response?.data?.message || 'Failed to stop trip. Please try again.'
+        );
       })
       .finally(() => setApiLoading(false));
   };
@@ -714,7 +759,16 @@ export default function TripConfiguration() {
               ? 'Your device is now recording data. All set!'
               : 'The device has been turned off. Data capture has ended.'
           }
-          onClose={() => setModelLoader(false)}
+          onClose={() => {
+            setModelLoader(false);
+            if (modalType === 'success') {
+              if (statusTrip === 0) {
+                handleReset();
+              } else {
+                handleReset2();
+              }
+            }
+          }}
         />
       </SafeAreaView>
     </AutocompleteDropdownContextProvider>

@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput as RNTextInput, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput as RNTextInput, TouchableOpacity, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import axios from 'axios';
 import { BASE_URL } from '../services/apiClient';
 import { EndPoints } from '../services/endPoints';
+import { saveUser } from '../mmkv-storage/storage';
 
 export default function VerifyOTP() {
   const router = useRouter();
@@ -57,18 +58,44 @@ export default function VerifyOTP() {
 
     try {
       const res = await axios.post(`${BASE_URL}/${EndPoints.OTP_VERIFY}`, {
-        phone: `+91${phone}`, // ✅ E.164 fix
+        phone: `+91${phone}`,
         otp: entered,
       });
 
+      console.log('✅ OTP verification response:', JSON.stringify(res.data, null, 2));
+
+      // Check if verification was successful (token might be at different levels)
+      const token = res.data?.token || res.data?.data?.token || null;
+      const responseUser = res.data?.user || res.data?.data?.user || null;
+
       if (res.data) {
-        router.replace('/(tabs)');
+        // Save user data with token to storage
+        const userData = {
+          data: {
+            token: token || 'dev-token',
+            user: {
+              Username: name || responseUser?.username || responseUser?.Username || 'User',
+              Email: email || responseUser?.email || responseUser?.Email || '',
+              Phone: `+91${phone}`,
+            },
+          },
+        };
+
+        console.log('💾 Saving user data to storage');
+        console.log('   Token:', token ? `${token.substring(0, 20)}...` : 'none - using dev-token');
+        console.log('   User:', userData.data.user);
+        saveUser(userData);
+
+        Alert.alert('Success', 'Account verified successfully!', [
+          { text: 'OK', onPress: () => router.replace('/(tabs)') },
+        ]);
       } else {
+        console.error('❌ Invalid response:', res.data);
         setError('OTP verification failed');
       }
     } catch (err: any) {
       console.log('❌ OTP verify error:', err.response?.data || err.message);
-      setError('Invalid or expired OTP');
+      setError(err.response?.data?.message || 'Invalid or expired OTP');
     }
   };
 

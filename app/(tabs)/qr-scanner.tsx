@@ -108,15 +108,16 @@ export default function QRScanner() {
       try {
         if (!value || value.trim() === '') {
           Alert.alert('Invalid QR Code', 'Please scan a valid device QR code.');
+          setIsScanning(false);
           return;
         }
 
         const s: BleState = await ble.state();
         if (s !== 'PoweredOn') {
           Alert.alert('Bluetooth Required', 'Enable Bluetooth and Location first.');
+          setIsScanning(false);
           return;
         }
-        setIsScanning(true);
         console.log('QR Code scanned, navigating with device:', value);
         // navigate to bluetooth screen
         router.push({
@@ -136,10 +137,14 @@ export default function QRScanner() {
   const codeScanner = useCodeScanner({
     codeTypes: ['qr'],
     onCodeScanned: (codes) => {
-      if (isScanning) return;
+      if (isScanning) {
+        console.log('Already scanning, ignoring duplicate scan');
+        return;
+      }
       for (const code of codes) {
         if (code.value) {
           console.log('QR Code Value:', code.value);
+          setIsScanning(true);
           onScanned(code.value);
           break;
         }
