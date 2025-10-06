@@ -30,7 +30,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/noti-logo.png",
+        "foregroundImage": "assets/images/noti-logo.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [

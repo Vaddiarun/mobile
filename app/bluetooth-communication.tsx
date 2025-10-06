@@ -1,26 +1,28 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, View } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Animated, Easing } from 'react-native';
 import { Image } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { BleManager, Device } from 'react-native-ble-plx';
 import { Buffer } from 'buffer';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import LoaderModal from '../components/LoaderModel';
+import StatusModal from '../components/StatusModel';
 
-// ensure Buffer exists (add this once in your entry if needed)
-// global.Buffer = global.Buffer || Buffer;
-
-const manager = new BleManager();
+const bleManager = new BleManager();
 
 export default function BluetoothCommunication() {
   const { qrCode } = useLocalSearchParams<{ qrCode?: string }>();
   const router = useRouter();
 
-  const [loading, setLoading] = useState(false);
-  const [modalWarn, setModalWarn] = useState(false);
-  const [scanning, setScanning] = useState(false);
-
   const rotateAnim = useRef(new Animated.Value(0)).current;
+  const [loading, setLoading] = useState(false);
+  const [modelLoader, setModelLoader] = useState(false);
+  const [scaning, setScaning] = useState(false);
+  const [devices, setDevices] = useState<any[]>([]);
+  let scanInterval: NodeJS.Timeout | null = null;
+
+  // rotation animation
   useEffect(() => {
-    const loop = Animated.loop(
+    Animated.loop(
       Animated.sequence([
         Animated.timing(rotateAnim, {
           toValue: 1,
@@ -35,9 +37,7 @@ export default function BluetoothCommunication() {
           useNativeDriver: true,
         }),
       ])
-    );
-    loop.start();
-    return () => loop.stop();
+    ).start();
   }, [rotateAnim]);
 
   const flipInterpolate = rotateAnim.interpolate({
@@ -45,96 +45,84 @@ export default function BluetoothCommunication() {
     outputRange: ['90deg', '210deg'],
   });
 
-  // scanning lifecycle
   useEffect(() => {
-    let timeout: NodeJS.Timeout | null = null;
+    scanAndConnect();
+    return () => {
+      bleManager.stopDeviceScan();
+      if (scanInterval) clearTimeout(scanInterval);
+      setScaning(false);
+    };
+  }, []);
 
-    const run = async () => {
-      setScanning(true);
-      setLoading(false);
-      manager.stopDeviceScan();
+  async function scanAndConnect() {
+    bleManager.stopDeviceScan();
+    if (scanInterval) {
+      clearTimeout(scanInterval);
+      scanInterval = null;
+      setScaning(false);
+    }
 
-      manager.startDeviceScan(null, null, async (error, device) => {
+    try {
+      setScaning(true);
+      bleManager.startDeviceScan(null, null, async (error, device) => {
         if (error) {
-          setScanning(false);
           setLoading(false);
-          manager.stopDeviceScan();
-          setModalWarn(true);
+          setScaning(false);
+          bleManager.stopDeviceScan();
           return;
         }
 
-        if (device?.name && qrCode && device.name === String(qrCode)) {
-          manager.stopDeviceScan();
-          try {
-            const connected = await device.connect();
-            await connected.discoverAllServicesAndCharacteristics();
-            await connected.requestMTU(241);
-            const services = await connected.services();
-            // choose a service index safely
-            const svc = services.find(Boolean);
-            if (!svc) throw new Error('No services');
+        setDevices([]);
+        if (device?.name === (qrCode as string)) {
+          bleManager.stopDeviceScan();
+          if (scanInterval) clearTimeout(scanInterval);
+          setScaning(false);
 
-            const chars = await connected.characteristicsForService(svc.uuid);
-            const tx = chars.find((c) => c.isNotifiable || c.isIndicatable);
-            const rx = chars.find((c) => c.isWritableWithResponse);
-            if (!tx?.uuid || !rx?.uuid) throw new Error('Missing TX/RX');
+          const connectedDevice = await device.connect();
+          await connectedDevice.discoverAllServicesAndCharacteristics();
+          await connectedDevice.requestMTU(241);
+          const services = await connectedDevice.services();
+          const service = services[2] || services[0];
 
-            startPacket(connected, svc.uuid, tx.uuid, rx.uuid);
-            setScanning(false);
-          } catch {
-            setScanning(false);
-            setModalWarn(true);
+          const chars = await connectedDevice.characteristicsForService(service.uuid);
+          const txChar = chars.find((c) => c.isNotifiable || c.isIndicatable);
+          const rxChar = chars.find((c) => c.isWritableWithResponse);
+
+          if (txChar?.uuid && rxChar?.uuid) {
+            startPacket(device, service.uuid, txChar.uuid, rxChar.uuid);
+          } else {
+            setLoading(false);
+            setScaning(false);
+            setModelLoader(true);
           }
         }
       });
+    } catch (e) {
+      console.log(e);
+    }
 
-      timeout = setTimeout(() => {
-        manager.stopDeviceScan();
-        setScanning(false);
-        setModalWarn(true);
-      }, 5000);
-    };
-
-    run();
-    return () => {
-      manager.stopDeviceScan();
-      if (timeout) clearTimeout(timeout);
-    };
-  }, [qrCode]);
-
-  // ---------- protocol helpers ----------
-  let tripOperation: 'IDLE' | 'START' | 'STOP' = 'IDLE';
-  let data: any = {};
-  let packetsArray: any[] = [];
-  let receivedPacketsCount: any = {};
-
-  function startPacket(device: Device, serviceUUID: string, txUUID: string, rxUUID: string) {
-    device.monitorCharacteristicForService(
-      serviceUUID.toLowerCase(),
-      txUUID.toLowerCase(),
-      async (error, characteristic) => {
-        if (error) return;
-        if (!characteristic?.value) return;
-
-        const raw = Buffer.from(characteristic.value, 'base64');
-        handlePacket(raw, device, serviceUUID, txUUID, rxUUID);
-      }
-    );
+    scanInterval = setTimeout(() => {
+      bleManager.stopDeviceScan();
+      setLoading(false);
+      setScaning(false);
+      setModelLoader(true);
+    }, 5000);
   }
 
+  // -------- BLE protocol functions --------
   function buildA1TimeResponse(deviceId: string): string {
     const buffer = Buffer.alloc(20);
-    let o = 0;
-    buffer.writeUInt8(0xa1, o++); // type
-    buffer.writeUInt8(20, o++); // length
-    const id = Buffer.alloc(10);
-    id.write(deviceId);
-    id.copy(buffer, o);
-    o += 10;
+    let offset = 0;
+    buffer.writeUInt8(0xa1, offset++);
+    buffer.writeUInt8(20, offset++);
+    const idBuf = Buffer.alloc(10);
+    idBuf.write(deviceId);
+    idBuf.copy(buffer, offset);
+    offset += 10;
     const epoch = Math.floor(Date.now() / 1000);
-    buffer.writeUInt32LE(epoch, o);
-    o += 4;
-    buffer.writeUInt32LE(0, o); // reserved
+    buffer.writeUInt32LE(epoch, offset);
+    offset += 4;
+    buffer.writeUInt32LE(0, offset);
     return buffer.toString('base64');
   }
 
@@ -153,12 +141,12 @@ export default function BluetoothCommunication() {
   }
 
   function buildA4DataRequest(): string {
-    const b = Buffer.alloc(6);
+    const buffer = Buffer.alloc(6);
     let o = 0;
-    b.writeUInt8(0xa4, o++); // type
-    b.writeUInt8(6, o++); // len
-    b.writeUInt32LE(0, o);
-    return b.toString('base64');
+    buffer.writeUInt8(0xa4, o++);
+    buffer.writeUInt8(6, o++);
+    buffer.writeUInt32LE(0, o);
+    return buffer.toString('base64');
   }
 
   async function sendDataRequest(
@@ -167,7 +155,7 @@ export default function BluetoothCommunication() {
     characteristicUUID: string
   ) {
     const pkt = buildA4DataRequest();
-    await manager.writeCharacteristicWithResponseForDevice(
+    await bleManager.writeCharacteristicWithResponseForDevice(
       deviceId,
       serviceUUID,
       characteristicUUID,
@@ -196,7 +184,7 @@ export default function BluetoothCommunication() {
     return b.toString('base64');
   }
 
-  // parsers
+  // --- Packet parsers ---
   function parseD1Packet(b64: string) {
     const buf = Buffer.from(b64, 'base64');
     let o = 0;
@@ -257,7 +245,6 @@ export default function BluetoothCommunication() {
     const packetType = buf[o++];
     const payloadLength = buf[o++];
     const num = buf.readUInt8(o++);
-
     const packets: any[] = [];
     for (let i = 0; i < num; i++) {
       const time = buf.readUInt32LE(o);
@@ -291,6 +278,11 @@ export default function BluetoothCommunication() {
     return { packetType, payloadLength, deviceId, reserved: reserved.toString('hex') };
   }
 
+  let tripOperation: 'IDLE' | 'START' | 'STOP' = 'IDLE';
+  let data: any = {};
+  let packetsArray: any[] = [];
+  let receivedPacketsCount: any = {};
+
   async function handlePacket(
     rawData: Buffer,
     device: Device,
@@ -298,35 +290,35 @@ export default function BluetoothCommunication() {
     txUUID: string,
     rxUUID: string
   ) {
-    const type = rawData[0];
+    const packetType = rawData[0];
     const b64 = rawData.toString('base64');
-    const d1 = parseD1Packet(b64);
+    const parsed = parseD1Packet(b64);
 
-    switch (type) {
-      case 0xd1: {
-        tripOperation = d1.tripStatus === 0 ? 'START' : 'STOP';
+    switch (packetType) {
+      case 0xd1:
+        tripOperation = parsed.tripStatus === 0 ? 'START' : 'STOP';
         await sendTimeResponse(device, 'G4200030', serviceUUID, rxUUID);
         break;
-      }
-      case 0xd2: {
+
+      case 0xd2:
         if (tripOperation === 'START') {
-          const start = buildA3Packet(10, true).toString('base64');
-          await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, start);
-        } else {
+          const config = buildA3Packet(10, true).toString('base64');
+          await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, config);
+        } else if (tripOperation === 'STOP') {
           await sendDataRequest(device.id, serviceUUID, rxUUID);
         }
         break;
-      }
-      case 0xd4: {
+
+      case 0xd4:
         if (tripOperation === 'STOP') {
-          const resp = parseD4Packet(b64);
-          receivedPacketsCount = { expected: resp };
+          const res = parseD4Packet(b64);
+          receivedPacketsCount = { expected: res };
           const ack = buildA5DataAck();
           await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, ack);
         }
         break;
-      }
-      case 0xd5: {
+
+      case 0xd5:
         if (tripOperation === 'STOP') {
           const res = parseD5DataPacket(b64);
           const ack = buildA5DataAck();
@@ -335,8 +327,8 @@ export default function BluetoothCommunication() {
           data = { ...data, allData: res, packets: packetsArray };
         }
         break;
-      }
-      case 0xd6: {
+
+      case 0xd6:
         if (tripOperation === 'STOP') {
           const ack = buildA5DataAck();
           const ok = await device.writeCharacteristicWithResponseForService(
@@ -351,8 +343,8 @@ export default function BluetoothCommunication() {
           }
         }
         break;
-      }
-      default: {
+
+      default:
         router.replace({
           pathname: '/trip-configuration',
           params: {
@@ -363,12 +355,23 @@ export default function BluetoothCommunication() {
           },
         });
         if (tripOperation === 'START') {
-          try {
-            await manager.cancelDeviceConnection(device.id);
-          } catch {}
+          await bleManager.cancelDeviceConnection(device.id);
+        }
+    }
+  }
+
+  function startPacket(device: Device, serviceUUID: string, txUUID: string, rxUUID: string) {
+    device.monitorCharacteristicForService(
+      serviceUUID.toLowerCase(),
+      txUUID.toLowerCase(),
+      async (error, characteristic) => {
+        if (error) return;
+        if (characteristic?.value) {
+          const raw = Buffer.from(characteristic.value, 'base64');
+          handlePacket(raw, device, serviceUUID, txUUID, rxUUID);
         }
       }
-    }
+    );
   }
 
   return (
@@ -392,8 +395,17 @@ export default function BluetoothCommunication() {
           contentFit="contain"
         />
       </View>
-      {/* Replace LoaderModal/StatusModal later with Expo-equivalents */}
-      {/* loading || modalWarn UI can be added with a simple Tailwind view or Alert */}
+      <LoaderModal visible={loading} />
+      <StatusModal
+        visible={modelLoader}
+        type="warning"
+        message="Device not found and inactive"
+        subMessage=""
+        onClose={() => {
+          setModelLoader(false);
+          router.back();
+        }}
+      />
     </View>
   );
 }

@@ -21,13 +21,14 @@ export default function TabsLayout() {
           backgroundColor: 'rgba(0,0,0,0.85)',
           borderTopWidth: 0,
           elevation: 0,
-          height: 44,
+          height: 10,
           alignSelf: 'center',
           borderRadius: 32,
           paddingHorizontal: 12,
+          paddingVertical: 20,
           marginLeft: 20,
           marginRight: 20,
-          marginBottom: Math.max(insets.bottom, 50),
+          marginBottom: Math.max(insets.bottom, 20),
         },
         tabBarItemStyle: { justifyContent: 'center', alignItems: 'center' },
         tabBarIconStyle: { justifyContent: 'center', alignItems: 'center' },
@@ -56,6 +57,6 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  dot: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  dot: { width: 45, height: 45, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
   dotFocused: { backgroundColor: '#2563EB' }, // blue-600
 });

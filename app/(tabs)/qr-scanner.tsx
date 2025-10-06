@@ -1,19 +1,18 @@
-import { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
-  PermissionsAndroid,
-  Platform,
-  TouchableOpacity,
   View,
   Text,
   StyleSheet,
+  TouchableOpacity,
+  PermissionsAndroid,
+  Platform,
+  Alert,
 } from 'react-native';
 import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
 import { useRouter } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
-// import BluetoothStateManager, { useBluetoothState } from 'react-native-bluetooth-state-manager';
-import * as IntentLauncher from 'expo-intent-launcher';
 import { BleManager, State as BleState } from 'react-native-ble-plx';
+import * as IntentLauncher from 'expo-intent-launcher';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 const ble = new BleManager();
 
@@ -22,61 +21,63 @@ export default function QRScanner() {
   const device = useCameraDevice('back');
   const [isScanning, setIsScanning] = useState(false);
 
-  // permissions: camera + Android BLE runtime
+  // Request camera + BLE + location permissions
   useEffect(() => {
-    const ask = async () => {
+    (async () => {
       const cam = await Camera.requestCameraPermission();
       if (cam !== 'granted') {
-        Alert.alert('Permission required', 'Camera permission is needed.');
+        Alert.alert('Permission Required', 'Camera permission is needed.');
         return;
       }
-      if (Platform.OS !== 'android') return;
 
-      if (Platform.Version >= 31) {
-        await PermissionsAndroid.requestMultiple([
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-        ]);
-      } else if (Platform.Version >= 23) {
-        const hasLoc = await PermissionsAndroid.check(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
-        );
-        if (!hasLoc) {
-          await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+      if (Platform.OS === 'android') {
+        if (Platform.Version >= 31) {
+          await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+          ]);
+        } else if (Platform.Version >= 23) {
+          const hasLoc = await PermissionsAndroid.check(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+          );
+          if (!hasLoc) {
+            await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+          }
         }
       }
-    };
-    ask();
+    })();
   }, []);
 
-  // prompt to enable BT if off
-  // useEffect(() => {
-  //   if (btState === 'PoweredOff') {
-  //     // Android-only prompt to enable BT
-  //     BluetoothStateManager.requestToEnable();
-  //   }
-  // }, [btState]);
+  // Ensure Bluetooth is ON
   useEffect(() => {
     (async () => {
       try {
-        const s: BleState = await ble.state();
-        if (s !== 'PoweredOn' && Platform.OS === 'android') {
+        const state: BleState = await ble.state();
+        if (state !== 'PoweredOn' && Platform.OS === 'android') {
           await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.BLUETOOTH_SETTINGS);
         }
-      } catch {}
+      } catch (err) {
+        console.log('Bluetooth state check failed', err);
+      }
     })();
   }, []);
 
   const onScanned = useCallback(
     async (value: string) => {
-      // ensure BT is on
-      const s: BleState = await ble.state();
-      if (s !== 'PoweredOn') {
-        Alert.alert('Bluetooth needed', 'Enable Bluetooth and Location first.');
-        return;
+      try {
+        const s: BleState = await ble.state();
+        if (s !== 'PoweredOn') {
+          Alert.alert('Bluetooth Required', 'Enable Bluetooth and Location first.');
+          return;
+        }
+        setIsScanning(true);
+        router.push({
+          pathname: '/bluetooth-communication',
+          params: { qrCode: value },
+        });
+      } catch (err) {
+        console.log('Scan error', err);
       }
-      setIsScanning(true);
-      router.push({ pathname: '/bluetooth-communication', params: { qrCode: value } });
     },
     [router]
   );
@@ -85,39 +86,73 @@ export default function QRScanner() {
     codeTypes: ['qr'],
     onCodeScanned: (codes) => {
       if (isScanning) return;
-      for (const c of codes) if (c.value) onScanned(c.value);
+      for (const code of codes) {
+        if (code.value) {
+          console.log('QR Code Value:', code.value);
+          onScanned(code.value);
+          break;
+        }
+      }
     },
   });
 
   return (
-    <View className="flex-1 bg-black">
+    <View style={styles.container}>
       {device && (
         <Camera
-          style={StyleSheet.absoluteFill}
+          style={StyleSheet.absoluteFillObject}
           device={device}
           isActive={!isScanning}
           codeScanner={!isScanning ? codeScanner : undefined}
         />
       )}
 
-      {/* header */}
-      <View className="absolute left-5 right-5 top-12 flex-row items-center justify-between">
+      {/* Header */}
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => router.replace('/(tabs)')}>
-          <MaterialIcons name="close" size={28} color="#fff" />
+          <MaterialIcons name="arrow-back" size={28} color="#000" />
         </TouchableOpacity>
-        <Text className="text-lg font-semibold text-white">Scan the Device</Text>
-        <MaterialIcons name="more-vert" size={24} color="#fff" />
+        <Text style={styles.headerText}>Scan the Device</Text>
+        <MaterialIcons name="more-vert" size={24} color="#000" />
       </View>
 
-      {/* overlay frame */}
-      <View className="flex-1 items-center justify-center">
-        <View className="h-64 w-64">
-          <View className="absolute left-0 top-0 h-10 w-10 border-l-4 border-t-4 border-white" />
-          <View className="absolute right-0 top-0 h-10 w-10 border-r-4 border-t-4 border-white" />
-          <View className="absolute bottom-0 left-0 h-10 w-10 border-b-4 border-l-4 border-white" />
-          <View className="absolute bottom-0 right-0 h-10 w-10 border-b-4 border-r-4 border-white" />
+      {/* Overlay Frame */}
+      <View style={styles.overlay}>
+        <View style={styles.qrFrame}>
+          <View style={[styles.corner, styles.topLeft]} />
+          <View style={[styles.corner, styles.topRight]} />
+          <View style={[styles.corner, styles.bottomLeft]} />
+          <View style={[styles.corner, styles.bottomRight]} />
         </View>
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: 'transparent' },
+  header: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  headerText: { color: '#000', fontSize: 18, fontWeight: '600' },
+  overlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  qrFrame: { width: 250, height: 250 },
+  corner: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderColor: 'white',
+    borderWidth: 4,
+  },
+  topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 },
+  topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 },
+  bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 },
+  bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 },
+});
