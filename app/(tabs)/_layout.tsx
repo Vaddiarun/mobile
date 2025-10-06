@@ -21,23 +21,32 @@ export default function TabsLayout() {
           backgroundColor: 'rgba(0,0,0,0.85)',
           borderTopWidth: 0,
           elevation: 0,
-          height: 10,
-          alignSelf: 'center',
-          borderRadius: 32,
-          paddingHorizontal: 12,
-          paddingVertical: 20,
-          marginLeft: 20,
-          marginRight: 20,
+          height: 60,
+          borderRadius: 40,
+          marginHorizontal: 25,
           marginBottom: Math.max(insets.bottom, 20),
+          paddingBottom: 10,
+          paddingTop: 10,
+          justifyContent: 'center',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          // elevation: 5,
         },
-        tabBarItemStyle: { justifyContent: 'center', alignItems: 'center' },
-        tabBarIconStyle: { justifyContent: 'center', alignItems: 'center' },
-        tabBarIcon: ({ focused, color, size }) => {
+        tabBarItemStyle: {
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        tabBarIconStyle: {
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        tabBarIcon: ({ focused, color }) => {
           const isQR = route.name === 'qr-scanner';
           const name =
             route.name === 'index' ? 'home' : route.name === 'history' ? 'history' : 'home';
 
-          // circular highlight when focused
           return (
             <View style={[styles.dot, focused && styles.dotFocused]}>
               {isQR ? (
@@ -57,6 +66,14 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  dot: { width: 45, height: 45, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
-  dotFocused: { backgroundColor: '#2563EB' }, // blue-600
+  dot: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dotFocused: {
+    backgroundColor: '#2563EB', // blue-600
+  },
 });

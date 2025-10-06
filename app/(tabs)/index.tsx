@@ -131,7 +131,7 @@ export default function Home() {
           <Image
             source={require('../../assets/images/G8.png')}
             contentFit="contain"
-            className="absolute -top-4 left-6 z-20   h-[120px] w-[90px]"
+            className="absolute -top-4 left-6 z-20   h-[140px] w-[90px]"
             accessibilityLabel="Device"
           />
           <View className="relative mt-10 flex-row items-center rounded-xl bg-blue-600 p-7">
