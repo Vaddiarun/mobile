@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -93,7 +95,59 @@ export default function TripConfiguration() {
 
   const allTrips = getTrips() || [];
 
-  const fetchLocation = () => {
+  const requestLocationPermission = async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') {
+      return true;
+    }
+
+    try {
+      if (Platform.Version >= 31) {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          {
+            title: 'Location Permission',
+            message: 'This app needs access to your location to track trip data.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      } else if (Platform.Version >= 23) {
+        const hasPermission = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+        );
+        if (hasPermission) return true;
+
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          {
+            title: 'Location Permission',
+            message: 'This app needs access to your location to track trip data.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      }
+      return true;
+    } catch (err) {
+      console.warn('Permission error:', err);
+      return false;
+    }
+  };
+
+  const fetchLocation = async () => {
+    const hasPermission = await requestLocationPermission();
+    if (!hasPermission) {
+      Alert.alert(
+        'Permission Denied',
+        'Location permission is required to fetch your current location.'
+      );
+      return;
+    }
+
     setLoading(true);
     Geolocation.getCurrentPosition(
       async (pos) => {
@@ -142,19 +196,41 @@ export default function TripConfiguration() {
   );
 
   const getProfiles = async (token: string) => {
-    if (!token) return;
+    if (!token) {
+      console.log('No token provided for getProfiles');
+      Alert.alert('Authentication Error', 'No authentication token found. Please log in again.', [
+        { text: 'OK', onPress: () => router.replace('/(tabs)/index') },
+      ]);
+      return;
+    }
+    if (!deviceName) {
+      console.error('No deviceName available for getProfiles');
+      Alert.alert('Configuration Error', 'Device name is missing. Please scan the QR code again.', [
+        { text: 'OK', onPress: () => router.replace('/(tabs)/qr-scanner') },
+      ]);
+      return;
+    }
+
     setApiLoading(true);
     try {
       const res = await axios.get(
-        `${BASE_URL}/${EndPoints.GET_CUSTOMER_BOX_PROFILES}?deviceID=G4200030`,
+        `${BASE_URL}/${EndPoints.GET_CUSTOMER_BOX_PROFILES}?deviceID=${deviceName}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const boxList: any[] = res?.data?.data?.boxProfiles ?? [];
       const customized = [...boxList, { boxProfile: customizeProfile }];
       setBoxProfiles(customized);
       setProfilesData(res.data?.data);
-    } catch (e) {
-      // silent log if needed
+      console.log('Profiles loaded successfully:', {
+        customerProfiles: res.data?.data?.customerProfiles?.length,
+        boxProfiles: boxList.length,
+      });
+    } catch (e: any) {
+      console.error('Error loading profiles:', e?.response?.data || e?.message || e);
+      Alert.alert(
+        'Profile Loading Error',
+        'Failed to load customer and box profiles. Please check your connection and try again.'
+      );
     } finally {
       setApiLoading(false);
     }
@@ -168,11 +244,26 @@ export default function TripConfiguration() {
   }, [deviceName]);
 
   useEffect(() => {
-    if (user) {
-      getProfiles(user?.data?.token);
-      fetchLocation();
+    if (!user) {
+      console.error('No user found');
+      Alert.alert('Authentication Error', 'User not authenticated. Please log in again.', [
+        { text: 'OK', onPress: () => router.replace('/(tabs)/index') },
+      ]);
+      return;
     }
-  }, []);
+
+    if (!deviceName) {
+      console.error('No deviceName provided');
+      Alert.alert('Configuration Error', 'Device name is missing. Please scan the QR code again.', [
+        { text: 'OK', onPress: () => router.replace('/(tabs)/qr-scanner') },
+      ]);
+      return;
+    }
+
+    console.log('Loading profiles for device:', deviceName);
+    getProfiles(user?.data?.token);
+    fetchLocation();
+  }, [deviceName]);
 
   const validateForm = () => {
     const e: Record<string, string> = {};

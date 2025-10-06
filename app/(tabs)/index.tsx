@@ -41,16 +41,44 @@ export default function Home() {
       if (Platform.OS !== 'android') return;
 
       if (Platform.Version >= 31) {
-        await PermissionsAndroid.requestMultiple([
+        const permissions = await PermissionsAndroid.requestMultiple([
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         ]);
+
+        const allGranted = Object.values(permissions).every(
+          (status) => status === PermissionsAndroid.RESULTS.GRANTED
+        );
+
+        if (!allGranted) {
+          Alert.alert(
+            'Permissions Required',
+            'Bluetooth and Location permissions are required for scanning devices.'
+          );
+        }
       } else if (Platform.Version >= 23) {
         const hasLoc = await PermissionsAndroid.check(
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
         );
         if (!hasLoc) {
-          await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+            {
+              title: 'Location Permission',
+              message: 'Location permission is required for Bluetooth scanning.',
+              buttonNeutral: 'Ask Me Later',
+              buttonNegative: 'Cancel',
+              buttonPositive: 'OK',
+            }
+          );
+
+          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+            Alert.alert(
+              'Permission Required',
+              'Location permission is required to scan for Bluetooth devices.'
+            );
+          }
         }
       }
     };

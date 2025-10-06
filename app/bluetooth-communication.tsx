@@ -74,66 +74,99 @@ export default function BluetoothCommunication() {
   }, []);
 
   async function scanAndConnect() {
-    if (scaning) return; // already scanning
+    if (scaning) return;
 
     bleManager.stopDeviceScan();
     if (scanIntervalRef.current) {
       clearTimeout(scanIntervalRef.current);
       scanIntervalRef.current = null;
-      setScaning(false);
     }
 
+    setScaning(true);
+    let deviceFoundAndConnecting = false;
+
     try {
-      setScaning(true);
+      console.log('Starting Bluetooth scan for device:', qrCode);
+
       bleManager.startDeviceScan(null, null, async (error, device) => {
         if (error) {
-          setLoading(false);
-          setScaning(false);
+          console.error('Bluetooth scan error:', error);
           bleManager.stopDeviceScan();
+          if (!deviceFoundAndConnecting) {
+            setLoading(false);
+            setScaning(false);
+          }
           return;
         }
 
-        setDevices([]);
         if (device?.name === (qrCode as string)) {
+          console.log('Device found:', device.name);
+          deviceFoundAndConnecting = true;
+
           bleManager.stopDeviceScan();
           if (scanIntervalRef.current) {
             clearTimeout(scanIntervalRef.current);
             scanIntervalRef.current = null;
           }
-
           setScaning(false);
 
-          const connectedDevice = await device.connect();
-          connectedDeviceRef.current = connectedDevice;
-          await connectedDevice.discoverAllServicesAndCharacteristics();
-          await connectedDevice.requestMTU(241);
-          const services = await connectedDevice.services();
-          const service = services[2] || services[0];
+          try {
+            console.log('Connecting to device...');
+            const connectedDevice = await device.connect();
+            connectedDeviceRef.current = connectedDevice;
+            console.log('Device connected, discovering services...');
 
-          const chars = await connectedDevice.characteristicsForService(service.uuid);
-          const txChar = chars.find((c) => c.isNotifiable || c.isIndicatable);
-          const rxChar = chars.find((c) => c.isWritableWithResponse);
+            await connectedDevice.discoverAllServicesAndCharacteristics();
+            await connectedDevice.requestMTU(241);
+            const services = await connectedDevice.services();
+            console.log('Services discovered:', services.length);
 
-          if (txChar?.uuid && rxChar?.uuid) {
-            startPacket(connectedDevice, service.uuid, txChar.uuid, rxChar.uuid);
-          } else {
+            const service = services[2] || services[0];
+            if (!service) {
+              throw new Error('No services found on device');
+            }
+
+            const chars = await connectedDevice.characteristicsForService(service.uuid);
+            const txChar = chars.find((c) => c.isNotifiable || c.isIndicatable);
+            const rxChar = chars.find((c) => c.isWritableWithResponse);
+
+            if (txChar?.uuid && rxChar?.uuid) {
+              console.log('Starting packet communication...');
+              startPacket(connectedDevice, service.uuid, txChar.uuid, rxChar.uuid);
+            } else {
+              console.error('Required characteristics not found');
+              setLoading(false);
+              setModelLoader(true);
+            }
+          } catch (connectionError) {
+            console.error('Connection error:', connectionError);
             setLoading(false);
-            setScaning(false);
             setModelLoader(true);
           }
         }
       });
-    } catch (e) {
-      console.log(e);
-    }
 
-    scanIntervalRef.current = setTimeout(() => {
-      bleManager.stopDeviceScan();
+      scanIntervalRef.current = setTimeout(() => {
+        if (!deviceFoundAndConnecting) {
+          console.log('Scan timeout - device not found');
+          bleManager.stopDeviceScan();
+          setLoading(false);
+          setScaning(false);
+          setModelLoader(true);
+          scanIntervalRef.current = null;
+        } else {
+          console.log('Timeout skipped - device is connecting');
+          scanIntervalRef.current = null;
+        }
+      }, 10000);
+    } catch (e) {
+      console.error('Scan initialization error:', e);
       setLoading(false);
       setScaning(false);
-      setModelLoader(true);
-      scanIntervalRef.current = null;
-    }, 5000);
+      if (!deviceFoundAndConnecting) {
+        setModelLoader(true);
+      }
+    }
   }
 
   // -------- BLE protocol functions --------
@@ -312,81 +345,106 @@ export default function BluetoothCommunication() {
     txUUID: string,
     rxUUID: string
   ) {
-    const packetType = rawData[0];
-    const b64 = rawData.toString('base64');
-    const parsed = parseD1Packet(b64);
+    try {
+      const packetType = rawData[0];
+      const b64 = rawData.toString('base64');
+      console.log('Received packet type:', `0x${packetType.toString(16)}`);
 
-    switch (packetType) {
-      case 0xd1:
-        tripOperationRef.current = parsed.tripStatus === 0 ? 'START' : 'STOP';
-        await sendTimeResponse(device, 'TF900001', serviceUUID, rxUUID);
-        break;
-
-      case 0xd2:
-        if (tripOperationRef.current === 'START') {
-          const config = buildA3Packet(10, true).toString('base64');
-          await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, config);
-
-          router.replace({
-            pathname: '/trip-configuration',
-            params: {
-              packets: JSON.stringify(dataRef.current),
-              tripStatus: 0,
-              deviceName: qrCode ?? '',
-              packetsCount: JSON.stringify(receivedPacketsCountRef.current),
-            },
-          });
-        } else if (tripOperationRef.current === 'STOP') {
-          await sendDataRequest(device.id, serviceUUID, rxUUID);
-        }
-        break;
-
-      case 0xd4:
-        if (tripOperationRef.current === 'STOP') {
-          const res = parseD4Packet(b64);
-          receivedPacketsCountRef.current = { expected: res };
-          const ack = buildA5DataAck();
-          await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, ack);
-        }
-        break;
-
-      case 0xd5:
-        if (tripOperationRef.current === 'STOP') {
-          const res = parseD5DataPacket(b64);
-          const ack = buildA5DataAck();
-          await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, ack);
-          packetsArrayRef.current = [...packetsArrayRef.current, ...res.packets];
-          dataRef.current = { ...dataRef.current, allData: res, packets: packetsArrayRef.current };
-        }
-        break;
-
-      case 0xd6:
-        if (tripOperationRef.current === 'STOP') {
-          const ack = buildA5DataAck();
-          const ok = await device.writeCharacteristicWithResponseForService(
+      switch (packetType) {
+        case 0xd1:
+          const parsed = parseD1Packet(b64);
+          tripOperationRef.current = parsed.tripStatus === 0 ? 'START' : 'STOP';
+          console.log('Trip operation:', tripOperationRef.current);
+          await sendTimeResponse(
+            device,
+            parsed.deviceId || (qrCode as string),
             serviceUUID,
-            rxUUID,
-            ack
+            rxUUID
           );
-          if (ok) {
-            const stop = buildA3Packet(10, false).toString('base64');
-            await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, stop);
-            tripOperationRef.current = 'IDLE';
+          break;
+
+        case 0xd2:
+          if (tripOperationRef.current === 'START') {
+            const config = buildA3Packet(10, true).toString('base64');
+            await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, config);
+            console.log('Navigating to trip configuration - START');
 
             router.replace({
               pathname: '/trip-configuration',
               params: {
                 packets: JSON.stringify(dataRef.current),
-                tripStatus: 1,
+                tripStatus: 0,
                 deviceName: qrCode ?? '',
                 packetsCount: JSON.stringify(receivedPacketsCountRef.current),
               },
             });
-
-            await bleManager.cancelDeviceConnection(device.id);
+          } else if (tripOperationRef.current === 'STOP') {
+            await sendDataRequest(device.id, serviceUUID, rxUUID);
           }
-        }
-        break;
+          break;
+
+        case 0xd4:
+          if (tripOperationRef.current === 'STOP') {
+            const res = parseD4Packet(b64);
+            receivedPacketsCountRef.current = { expected: res };
+            console.log('Received D4 packet, total packets:', res.totalPackets);
+            const ack = buildA5DataAck();
+            await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, ack);
+          }
+          break;
+
+        case 0xd5:
+          if (tripOperationRef.current === 'STOP') {
+            const res = parseD5DataPacket(b64);
+            const ack = buildA5DataAck();
+            await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, ack);
+            packetsArrayRef.current = [...packetsArrayRef.current, ...res.packets];
+            dataRef.current = {
+              ...dataRef.current,
+              allData: res,
+              packets: packetsArrayRef.current,
+            };
+            console.log('Received data packets, total so far:', packetsArrayRef.current.length);
+          }
+          break;
+
+        case 0xd6:
+          if (tripOperationRef.current === 'STOP') {
+            const ack = buildA5DataAck();
+            const ok = await device.writeCharacteristicWithResponseForService(
+              serviceUUID,
+              rxUUID,
+              ack
+            );
+            if (ok) {
+              const stop = buildA3Packet(10, false).toString('base64');
+              await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, stop);
+              tripOperationRef.current = 'IDLE';
+              console.log(
+                'Navigating to trip configuration - STOP, packets:',
+                packetsArrayRef.current.length
+              );
+
+              router.replace({
+                pathname: '/trip-configuration',
+                params: {
+                  packets: JSON.stringify(dataRef.current),
+                  tripStatus: 1,
+                  deviceName: qrCode ?? '',
+                  packetsCount: JSON.stringify(receivedPacketsCountRef.current),
+                },
+              });
+
+              await bleManager.cancelDeviceConnection(device.id);
+            }
+          }
+          break;
+
+        default:
+          console.warn('Unknown packet type:', `0x${packetType.toString(16)}`);
+      }
+    } catch (error) {
+      console.error('Error handling packet:', error);
     }
   }
 
