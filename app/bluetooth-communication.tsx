@@ -20,6 +20,7 @@ export default function BluetoothCommunication() {
   const [devices, setDevices] = useState<any[]>([]);
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(false);
+  const deviceFoundRef = useRef(false);
   const tripOperationRef = useRef<'IDLE' | 'START' | 'STOP'>('IDLE');
   const dataRef = useRef<any>({});
   const packetsArrayRef = useRef<any[]>([]);
@@ -82,8 +83,8 @@ export default function BluetoothCommunication() {
       scanIntervalRef.current = null;
     }
 
+    deviceFoundRef.current = false;
     setScaning(true);
-    let deviceFoundAndConnecting = false;
 
     try {
       console.log('Starting Bluetooth scan for device:', qrCode);
@@ -92,7 +93,7 @@ export default function BluetoothCommunication() {
         if (error) {
           console.error('Bluetooth scan error:', error);
           bleManager.stopDeviceScan();
-          if (!deviceFoundAndConnecting) {
+          if (!deviceFoundRef.current) {
             setLoading(false);
             setScaning(false);
           }
@@ -101,7 +102,7 @@ export default function BluetoothCommunication() {
 
         if (device?.name === (qrCode as string)) {
           console.log('Device found:', device.name);
-          deviceFoundAndConnecting = true;
+          deviceFoundRef.current = true;
 
           bleManager.stopDeviceScan();
           if (scanIntervalRef.current) {
@@ -147,23 +148,22 @@ export default function BluetoothCommunication() {
       });
 
       scanIntervalRef.current = setTimeout(() => {
-        if (!deviceFoundAndConnecting) {
+        if (!deviceFoundRef.current) {
           console.log('Scan timeout - device not found');
           bleManager.stopDeviceScan();
           setLoading(false);
           setScaning(false);
           setModelLoader(true);
-          scanIntervalRef.current = null;
         } else {
           console.log('Timeout skipped - device is connecting');
-          scanIntervalRef.current = null;
         }
+        scanIntervalRef.current = null;
       }, 10000);
     } catch (e) {
       console.error('Scan initialization error:', e);
       setLoading(false);
       setScaning(false);
-      if (!deviceFoundAndConnecting) {
+      if (!deviceFoundRef.current) {
         setModelLoader(true);
       }
     }
@@ -424,6 +424,7 @@ export default function BluetoothCommunication() {
                 'Navigating to trip configuration - STOP, packets:',
                 packetsArrayRef.current.length
               );
+              console.log('Trip data collected:', JSON.stringify(dataRef.current, null, 2));
 
               router.replace({
                 pathname: '/trip-configuration',
@@ -438,6 +439,10 @@ export default function BluetoothCommunication() {
               await bleManager.cancelDeviceConnection(device.id);
             }
           }
+          break;
+
+        case 0xd3:
+          console.log('Received D3 packet (acknowledgment) - ignoring');
           break;
 
         default:
