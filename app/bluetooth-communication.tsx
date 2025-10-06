@@ -18,7 +18,8 @@ export default function BluetoothCommunication() {
   const [modelLoader, setModelLoader] = useState(false);
   const [scaning, setScaning] = useState(false);
   const [devices, setDevices] = useState<any[]>([]);
-  let scanInterval: NodeJS.Timeout | null = null;
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const mountedRef = useRef(false);
 
   // rotation animation
   useEffect(() => {
@@ -46,19 +47,30 @@ export default function BluetoothCommunication() {
   });
 
   useEffect(() => {
+    if (mountedRef.current) return;
+    mountedRef.current = true;
+
     scanAndConnect();
+
     return () => {
+      // stop device scan and clear interval exactly once
       bleManager.stopDeviceScan();
-      if (scanInterval) clearTimeout(scanInterval);
+      if (scanIntervalRef.current) {
+        clearTimeout(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
       setScaning(false);
+      mountedRef.current = false;
     };
   }, []);
 
   async function scanAndConnect() {
+    if (scaning) return; // already scanning
+
     bleManager.stopDeviceScan();
-    if (scanInterval) {
-      clearTimeout(scanInterval);
-      scanInterval = null;
+    if (scanIntervalRef.current) {
+      clearTimeout(scanIntervalRef.current);
+      scanIntervalRef.current = null;
       setScaning(false);
     }
 
@@ -75,7 +87,11 @@ export default function BluetoothCommunication() {
         setDevices([]);
         if (device?.name === (qrCode as string)) {
           bleManager.stopDeviceScan();
-          if (scanInterval) clearTimeout(scanInterval);
+          if (scanIntervalRef.current) {
+            clearTimeout(scanIntervalRef.current);
+            scanIntervalRef.current = null;
+          }
+
           setScaning(false);
 
           const connectedDevice = await device.connect();
@@ -101,11 +117,12 @@ export default function BluetoothCommunication() {
       console.log(e);
     }
 
-    scanInterval = setTimeout(() => {
+    scanIntervalRef.current = setTimeout(() => {
       bleManager.stopDeviceScan();
       setLoading(false);
       setScaning(false);
       setModelLoader(true);
+      scanIntervalRef.current = null;
     }, 5000);
   }
 

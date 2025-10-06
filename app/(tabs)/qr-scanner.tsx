@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { BleManager, State as BleState } from 'react-native-ble-plx';
 import * as IntentLauncher from 'expo-intent-launcher';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useFocusEffect } from '@react-navigation/native';
 
 const ble = new BleManager();
 
@@ -20,6 +21,18 @@ export default function QRScanner() {
   const router = useRouter();
   const device = useCameraDevice('back');
   const [isScanning, setIsScanning] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      // When screen gets focus ensure scanning is false so Camera isActive
+      setIsScanning(false);
+
+      // cleanup not strictly necessary here, but kept for symmetry
+      return () => {
+        setIsScanning(false);
+      };
+    }, [])
+  );
 
   // Request camera + BLE + location permissions
   useEffect(() => {
@@ -71,12 +84,16 @@ export default function QRScanner() {
           return;
         }
         setIsScanning(true);
+        // navigate to bluetooth screen
         router.push({
           pathname: '/bluetooth-communication',
           params: { qrCode: value },
         });
       } catch (err) {
         console.log('Scan error', err);
+        // IMPORTANT: re-enable camera so it doesn't stay black
+        // short timeout gives the camera time to re-initialize
+        setTimeout(() => setIsScanning(false), 300);
       }
     },
     [router]

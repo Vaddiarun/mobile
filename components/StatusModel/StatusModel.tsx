@@ -9,13 +9,7 @@ type Props = {
   onClose: () => void;
 };
 
-export default function StatusModal({
-  visible,
-  type,
-  message,
-  subMessage,
-  onClose,
-}: Props) {
+export default function StatusModal({ visible, type, message, subMessage, onClose }: Props) {
   const icon = {
     success: '✅',
     error: '⛔',
@@ -38,9 +32,7 @@ export default function StatusModal({
       <View style={styles.overlay}>
         <View style={styles.box}>
           <Text style={styles.icon}>{icon}</Text>
-          <Text style={[styles.message, { fontWeight: 'bold', fontSize: 16 }]}>
-            {message}
-          </Text>
+          <Text style={[styles.message, { fontWeight: 'bold', fontSize: 16 }]}>{message}</Text>
           {subMessage ? <Text style={styles.message}>{subMessage}</Text> : null}
 
           {/* Show button only for error/warning */}
