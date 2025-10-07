@@ -24,7 +24,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import axios from 'axios';
 
-import { getUser, getTrips, saveTrip, clearTrip } from '../mmkv-storage/storage';
+import { getUser, getTrips, saveTrip, updateTrip } from '../mmkv-storage/storage';
 import LoaderModal from '../components/LoaderModel';
 import StatusModal from '../components/StatusModel';
 import { BASE_URL } from '../services/apiClient';
@@ -367,7 +367,6 @@ export default function TripConfiguration() {
     setLocation('');
     setLocationsRaw('');
     setStatusTrip(0);
-    clearTrip();
     router.replace('/(tabs)');
   };
 
@@ -399,6 +398,7 @@ export default function TripConfiguration() {
       tripConfig,
       timestamp: tripStartTime,
       createdAt: tripStartTime,
+      status: 'Started',
     };
 
     console.log('📡 Starting trip...');
@@ -438,8 +438,18 @@ export default function TripConfiguration() {
 
     const actualTotalPackets = packetsCount?.expected?.totalPackets ?? actualPackets.length ?? 0;
 
+    // Find the active trip for this device
+    const activeTrip = allTrips.find(
+      (trip: any) => trip.deviceID === deviceName && trip.status === 'Started'
+    );
+
+    if (!activeTrip) {
+      Alert.alert('Error', 'No active trip found for this device');
+      return;
+    }
+
     const body = {
-      tripName: allTrips[0]?.tripName,
+      tripName: activeTrip.tripName,
       fileName: `${fileName}.csv`,
       data: dataString,
       location: stopLat,
@@ -470,6 +480,11 @@ export default function TripConfiguration() {
       })
       .then((res) => {
         console.log('✅ Trip stopped successfully:', res.data);
+        updateTrip(deviceName, {
+          status: 'Stopped',
+          stopTimestamp: Date.now(),
+          stopLocation: stopLat,
+        });
         setModalType('success');
         setModelLoader(true);
       })

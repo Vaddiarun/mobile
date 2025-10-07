@@ -25,6 +25,14 @@ export const saveTrip = (tripData: any) => {
   storage.set("trips", JSON.stringify(trips));
 };
 
+export const updateTrip = (deviceID: string, updates: any) => {
+  const existingTrips = getTrips() || [];
+  const updatedTrips = existingTrips.map((trip: any) => 
+    trip.deviceID === deviceID ? { ...trip, ...updates } : trip
+  );
+  storage.set("trips", JSON.stringify(updatedTrips));
+};
+
 export const getTrips = (): any | null => {
   const userData = storage.getString("trips");
   return userData ? JSON.parse(userData) : null;

@@ -1,10 +1,11 @@
 // app/(tabs)/history.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Pressable } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { getTrips } from '../../mmkv-storage/storage';
 
 type TripRow = {
@@ -22,16 +23,22 @@ export default function History() {
   const [tab, setTab] = useState<'all' | 'today'>('all');
   const [allData, setAllData] = useState<TripRow[]>([]);
 
-  useEffect(() => {
+  const loadTrips = useCallback(() => {
     const trips = getTrips?.() || [];
     const formatted: TripRow[] = trips.map((trip: any, index: number) => ({
       id: String(index + 1),
       deviceId: String(trip.deviceID ?? '—'),
-      timestamp: formatDate(trip.timestamp ?? trip.createdAt ?? Date.now()),
-      status: 'Started',
+      timestamp: formatDate(trip.stopTimestamp ?? trip.timestamp ?? trip.createdAt ?? Date.now()),
+      status: trip.status || 'Started',
     }));
     setAllData(formatted);
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTrips();
+    }, [loadTrips])
+  );
 
   const todayPrefix = useMemo(
     () =>

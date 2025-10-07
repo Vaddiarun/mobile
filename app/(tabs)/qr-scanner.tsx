@@ -119,6 +119,8 @@ export default function QRScanner() {
           return;
         }
         console.log('QR Code scanned, navigating with device:', value);
+        // Keep scanning disabled to prevent camera errors
+        setIsScanning(true);
         // navigate to bluetooth screen
         router.push({
           pathname: '/bluetooth-communication',
@@ -126,9 +128,7 @@ export default function QRScanner() {
         });
       } catch (err) {
         console.log('Scan error', err);
-        // IMPORTANT: re-enable camera so it doesn't stay black
-        // short timeout gives the camera time to re-initialize
-        setTimeout(() => setIsScanning(false), 300);
+        setIsScanning(false);
       }
     },
     [router]
@@ -154,12 +154,12 @@ export default function QRScanner() {
 
   return (
     <View style={styles.container}>
-      {device && (
+      {device && !isScanning && (
         <Camera
           style={StyleSheet.absoluteFillObject}
           device={device}
-          isActive={!isScanning}
-          codeScanner={!isScanning ? codeScanner : undefined}
+          isActive={true}
+          codeScanner={codeScanner}
         />
       )}
 
