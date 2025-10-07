@@ -87,13 +87,15 @@ export default function BluetoothCommunication() {
     bleManager.stopDeviceScan();
     deviceFoundRef.current = false;
     setScaning(true);
+    setLoading(true);
 
     try {
-      console.log('Starting Bluetooth scan for device:', qrCode);
+      console.log('[BLE] Starting Bluetooth scan for device:', qrCode);
+      console.log('[BLE] QR Code type:', typeof qrCode, 'Value:', qrCode);
 
       bleManager.startDeviceScan(null, null, async (error, device) => {
         if (error) {
-          console.error('Bluetooth scan error:', error);
+          console.error('[BLE] Bluetooth scan error:', error);
           bleManager.stopDeviceScan();
           if (!deviceFoundRef.current) {
             setLoading(false);
@@ -103,23 +105,27 @@ export default function BluetoothCommunication() {
           return;
         }
 
+        if (device?.name) {
+          console.log('[BLE] Found device:', device.name, 'Looking for:', qrCode);
+        }
+
         if (device?.name === (qrCode as string)) {
-          console.log('Device found:', device.name);
+          console.log('[BLE] Device MATCHED!', device.name);
           deviceFoundRef.current = true;
 
           bleManager.stopDeviceScan();
           setScaning(false);
 
           try {
-            console.log('Connecting to device...');
+            console.log('[BLE] Connecting to device...');
             const connectedDevice = await device.connect();
             connectedDeviceRef.current = connectedDevice;
-            console.log('Device connected, discovering services...');
+            console.log('[BLE] Device connected, discovering services...');
 
             await connectedDevice.discoverAllServicesAndCharacteristics();
             await connectedDevice.requestMTU(241);
             const services = await connectedDevice.services();
-            console.log('Services discovered:', services.length);
+            console.log('[BLE] Services discovered:', services.length);
 
             const service = services[2] || services[0];
             if (!service) {
@@ -131,22 +137,22 @@ export default function BluetoothCommunication() {
             const rxChar = chars.find((c) => c.isWritableWithResponse);
 
             if (txChar?.uuid && rxChar?.uuid) {
-              console.log('Starting packet communication...');
+              console.log('[BLE] Starting packet communication...');
               startPacket(connectedDevice, service.uuid, txChar.uuid, rxChar.uuid);
             } else {
-              console.error('Required characteristics not found');
+              console.error('[BLE] Required characteristics not found');
               setLoading(false);
               setModelLoader(true);
             }
           } catch (connectionError) {
-            console.error('Connection error:', connectionError);
+            console.error('[BLE] Connection error:', connectionError);
             setLoading(false);
             setModelLoader(true);
           }
         }
       });
     } catch (e) {
-      console.error('Scan initialization error:', e);
+      console.error('[BLE] Scan initialization error:', e);
       setLoading(false);
       setScaning(false);
       if (!deviceFoundRef.current) {
