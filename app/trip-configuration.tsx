@@ -24,7 +24,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import axios from 'axios';
 
-import { getUser, getTrips, saveTrip, updateTrip } from '../mmkv-storage/storage';
+import { getUser, getTrips, saveTrip, clearTrip } from '../mmkv-storage/storage';
 import LoaderModal from '../components/LoaderModel';
 import StatusModal from '../components/StatusModel';
 import { BASE_URL } from '../services/apiClient';
@@ -240,7 +240,7 @@ export default function TripConfiguration() {
       });
 
       const boxList: any[] = res?.data?.data?.boxProfiles ?? [];
-      const customized = [...boxList, { boxProfile: customizeProfile }];
+      const customized = [...boxList, { id: 'customize_profile', boxProfile: customizeProfile }];
       setBoxProfiles(customized);
       setProfilesData(res.data?.data);
       console.log('✅ Profiles loaded successfully:', {
@@ -288,7 +288,10 @@ export default function TripConfiguration() {
         customerProfiles: [defaultCustomerProfile],
         boxProfiles: [defaultBoxProfile],
       });
-      setBoxProfiles([defaultBoxProfile, { boxProfile: customizeProfile }]);
+      setBoxProfiles([
+        defaultBoxProfile,
+        { id: 'customize_profile', boxProfile: customizeProfile },
+      ]);
       console.log('✅ Default profiles loaded for development mode');
     } finally {
       setApiLoading(false);
@@ -367,6 +370,7 @@ export default function TripConfiguration() {
     setLocation('');
     setLocationsRaw('');
     setStatusTrip(0);
+    clearTrip();
     router.replace('/(tabs)');
   };
 
@@ -398,7 +402,6 @@ export default function TripConfiguration() {
       tripConfig,
       timestamp: tripStartTime,
       createdAt: tripStartTime,
-      status: 'Started',
     };
 
     console.log('📡 Starting trip...');
@@ -418,6 +421,8 @@ export default function TripConfiguration() {
       })
       .catch((err) => {
         console.error('❌ Start trip error:', err?.response?.data || err?.message);
+        // Clear any stale trip data if start fails
+        clearTrip();
         Alert.alert(
           'Error',
           err?.response?.data?.message || 'Failed to start trip. Please try again.'
@@ -438,18 +443,8 @@ export default function TripConfiguration() {
 
     const actualTotalPackets = packetsCount?.expected?.totalPackets ?? actualPackets.length ?? 0;
 
-    // Find the active trip for this device
-    const activeTrip = allTrips.find(
-      (trip: any) => trip.deviceID === deviceName && trip.status === 'Started'
-    );
-
-    if (!activeTrip) {
-      Alert.alert('Error', 'No active trip found for this device');
-      return;
-    }
-
     const body = {
-      tripName: activeTrip.tripName,
+      tripName: allTrips[0]?.tripName,
       fileName: `${fileName}.csv`,
       data: dataString,
       location: stopLat,
@@ -480,16 +475,13 @@ export default function TripConfiguration() {
       })
       .then((res) => {
         console.log('✅ Trip stopped successfully:', res.data);
-        updateTrip(deviceName, {
-          status: 'Stopped',
-          stopTimestamp: Date.now(),
-          stopLocation: stopLat,
-        });
         setModalType('success');
         setModelLoader(true);
       })
       .catch((err) => {
         console.error('❌ Stop trip error:', err?.response?.data || err?.message);
+        // Clear stale trip data if stop fails (e.g., no active trip on server)
+        clearTrip();
         Alert.alert(
           'Error',
           err?.response?.data?.message || 'Failed to stop trip. Please try again.'

@@ -38,7 +38,6 @@ export default function BluetoothCommunication() {
   const connectedDeviceRef = useRef<Device | null>(null);
   const monitorSubscriptionRef = useRef<any>(null);
   const hasNavigatedRef = useRef(false);
-  const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // rotation animation
   useEffect(() => {
@@ -73,10 +72,6 @@ export default function BluetoothCommunication() {
 
     return () => {
       bleManager.stopDeviceScan();
-      if (scanTimeoutRef.current) {
-        clearTimeout(scanTimeoutRef.current);
-        scanTimeoutRef.current = null;
-      }
       if (monitorSubscriptionRef.current && !hasNavigatedRef.current) {
         monitorSubscriptionRef.current.remove();
         monitorSubscriptionRef.current = null;
@@ -96,25 +91,10 @@ export default function BluetoothCommunication() {
     try {
       console.log('Starting Bluetooth scan for device:', qrCode);
 
-      // Set scan timeout to 30 seconds
-      scanTimeoutRef.current = setTimeout(() => {
-        if (!deviceFoundRef.current && mountedRef.current) {
-          console.log('Scan timeout - device not found within 30 seconds');
-          bleManager.stopDeviceScan();
-          setLoading(false);
-          setScaning(false);
-          setModelLoader(true);
-        }
-      }, 30000);
-
       bleManager.startDeviceScan(null, null, async (error, device) => {
         if (error) {
           console.error('Bluetooth scan error:', error);
           bleManager.stopDeviceScan();
-          if (scanTimeoutRef.current) {
-            clearTimeout(scanTimeoutRef.current);
-            scanTimeoutRef.current = null;
-          }
           if (!deviceFoundRef.current) {
             setLoading(false);
             setScaning(false);
@@ -126,10 +106,6 @@ export default function BluetoothCommunication() {
         if (device?.name === (qrCode as string)) {
           console.log('Device found:', device.name);
           deviceFoundRef.current = true;
-          if (scanTimeoutRef.current) {
-            clearTimeout(scanTimeoutRef.current);
-            scanTimeoutRef.current = null;
-          }
 
           bleManager.stopDeviceScan();
           setScaning(false);
@@ -364,18 +340,15 @@ export default function BluetoothCommunication() {
         case 0xd1:
           const parsed = parseD1Packet(b64);
 
-          const allTrips = getTrips() || [];
-          const existingTrip = allTrips.find(
-            (trip: any) => trip.deviceID === qrCode && trip.status === 'Started'
+          // Use device's actual trip status as source of truth
+          // parsed.tripStatus: 0 = no trip running, 1 = trip running
+          tripOperationRef.current = parsed.tripStatus === 0 ? 'START' : 'STOP';
+          console.log(
+            'Trip operation:',
+            tripOperationRef.current,
+            '(device tripStatus:',
+            parsed.tripStatus + ')'
           );
-
-          if (existingTrip) {
-            tripOperationRef.current = 'STOP';
-            console.log('Trip operation: STOP (found active trip in local storage)');
-          } else {
-            tripOperationRef.current = parsed.tripStatus === 0 ? 'START' : 'STOP';
-            console.log('Trip operation:', tripOperationRef.current, '(from device)');
-          }
 
           await sendTimeResponse(
             device,
@@ -391,7 +364,7 @@ export default function BluetoothCommunication() {
             await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, config);
             console.log('Trip started on device, waiting for confirmation...');
 
-            await new Promise((resolve) => setTimeout(resolve, 1500));
+            await new Promise((resolve) => setTimeout(resolve, 500));
 
             await bleManager.cancelDeviceConnection(device.id);
             console.log(
