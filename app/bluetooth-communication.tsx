@@ -372,6 +372,11 @@ export default function BluetoothCommunication() {
 
             await new Promise((resolve) => setTimeout(resolve, 500));
 
+            if (monitorSubscriptionRef.current) {
+              monitorSubscriptionRef.current.remove();
+              monitorSubscriptionRef.current = null;
+            }
+
             await bleManager.cancelDeviceConnection(device.id);
             console.log(
               'Disconnected from device - it will continue recording and stay in fast advertising mode'
