@@ -1,12 +1,11 @@
-// app/(tabs)/history.tsx
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Pressable } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Pressable, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { getTrips } from '../../mmkv-storage/storage';
+import { getTrips, clearAllTrips } from '../../mmkv-storage/storage';
 
 type TripRow = {
   id: string;
@@ -33,6 +32,25 @@ export default function History() {
     }));
     setAllData(formatted);
   }, []);
+
+  const handleClearAllHistory = () => {
+    Alert.alert(
+      'Clear All History',
+      'Are you sure you want to delete all trip history? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: () => {
+            clearAllTrips();
+            setAllData([]);
+            Alert.alert('Success', 'All trip history has been cleared.');
+          },
+        },
+      ]
+    );
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -73,15 +91,16 @@ export default function History() {
     <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-white">
       {/* Header */}
       <View className="px-5 pt-2">
-        <View className="mb-3 flex-row items-center justify-center">
+        <View className="mb-3 flex-row items-center justify-between">
+          <View className="w-9" />
           <Text className="text-lg font-extrabold text-black">Device History</Text>
-          {/* <Pressable
+          <Pressable
             accessibilityRole="button"
-            accessibilityLabel="More options"
-            onPress={() => router.push('/(tabs)/index')}
+            accessibilityLabel="Clear all history"
+            onPress={handleClearAllHistory}
             className="h-9 w-9 items-center justify-center">
-            <MaterialCommunityIcons name="dots-vertical" size={22} color="#000" />
-          </Pressable> */}
+            <MaterialCommunityIcons name="delete-outline" size={22} color="#d32f2f" />
+          </Pressable>
         </View>
       </View>
 

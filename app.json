@@ -39,6 +39,7 @@
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADVERTISE",
         "android.permission.BLUETOOTH_ADMIN"
       ],
       "package": "com.termi007xt.myexpoapp"
