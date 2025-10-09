@@ -18,11 +18,15 @@ export default function BluetoothCommunication() {
   React.useEffect(() => {
     if (!qrCode) {
       console.error('No QR code provided to BluetoothCommunication');
-      Alert.alert('Error', 'No device code provided. Please scan QR code again.', [
-        { text: 'OK', onPress: () => router.replace('/(tabs)/qr-scanner') },
-      ]);
+      setTimeout(() => {
+        Alert.alert('Error', 'No device code provided. Please scan QR code again.', [
+          { text: 'OK', onPress: () => router.replace('/(tabs)/qr-scanner') },
+        ]);
+      }, 500);
+      return;
     }
-  }, [qrCode]);
+    console.log('BluetoothCommunication mounted with QR code:', qrCode);
+  }, [qrCode, router]);
 
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const [loading, setLoading] = useState(false);
@@ -139,6 +143,19 @@ export default function BluetoothCommunication() {
             const connectedDevice = await device.connect();
             connectedDeviceRef.current = connectedDevice;
             console.log('Device connected, discovering services...');
+
+            // Add disconnection listener to prevent crash
+            connectedDevice.onDisconnected((error, device) => {
+              console.log('Device disconnected:', device?.name, error?.message);
+              if (monitorSubscriptionRef.current && !hasNavigatedRef.current) {
+                try {
+                  monitorSubscriptionRef.current.remove();
+                  monitorSubscriptionRef.current = null;
+                } catch (e) {
+                  console.log('Error cleaning up on disconnect:', e);
+                }
+              }
+            });
 
             await connectedDevice.discoverAllServicesAndCharacteristics();
             await connectedDevice.requestMTU(241);
@@ -400,15 +417,29 @@ export default function BluetoothCommunication() {
 
             hasNavigatedRef.current = true;
 
-            router.replace({
-              pathname: '/trip-configuration',
-              params: {
-                packets: JSON.stringify(dataRef.current),
-                tripStatus: 0,
-                deviceName: qrCode ?? '',
-                packetsCount: JSON.stringify(receivedPacketsCountRef.current),
-              },
-            });
+            // Store data in MMKV instead of passing large JSON in params
+            try {
+              const { saveData } = require('../mmkv-storage/storage');
+              const tripDataKey = `trip_data_${qrCode}_${Date.now()}`;
+              saveData(tripDataKey, {
+                packets: dataRef.current,
+                packetsCount: receivedPacketsCountRef.current,
+              });
+              
+              setTimeout(() => {
+                router.replace({
+                  pathname: '/trip-configuration',
+                  params: {
+                    tripDataKey,
+                    tripStatus: '0',
+                    deviceName: qrCode ?? '',
+                  },
+                });
+              }, 300);
+            } catch (err) {
+              console.error('Navigation error:', err);
+              Alert.alert('Error', 'Failed to navigate. Please try again.');
+            }
           } else if (tripOperationRef.current === 'STOP') {
             console.log('Device has active trip, requesting data from device...');
             await sendDataRequest(device.id, serviceUUID, rxUUID);
@@ -459,15 +490,29 @@ export default function BluetoothCommunication() {
               console.log('Trip data collected:', JSON.stringify(dataRef.current, null, 2));
               hasNavigatedRef.current = true;
 
-              router.replace({
-                pathname: '/trip-configuration',
-                params: {
-                  packets: JSON.stringify(dataRef.current),
-                  tripStatus: 1,
-                  deviceName: qrCode ?? '',
-                  packetsCount: JSON.stringify(receivedPacketsCountRef.current),
-                },
-              });
+              // Store data in MMKV instead of passing large JSON in params
+              try {
+                const { saveData } = require('../mmkv-storage/storage');
+                const tripDataKey = `trip_data_${qrCode}_${Date.now()}`;
+                saveData(tripDataKey, {
+                  packets: dataRef.current,
+                  packetsCount: receivedPacketsCountRef.current,
+                });
+                
+                setTimeout(() => {
+                  router.replace({
+                    pathname: '/trip-configuration',
+                    params: {
+                      tripDataKey,
+                      tripStatus: '1',
+                      deviceName: qrCode ?? '',
+                    },
+                  });
+                }, 300);
+              } catch (err) {
+                console.error('Navigation error:', err);
+                Alert.alert('Error', 'Failed to navigate. Please try again.');
+              }
 
               await bleManager.cancelDeviceConnection(device.id);
             }
@@ -493,6 +538,15 @@ export default function BluetoothCommunication() {
       async (error, characteristic) => {
         if (error) {
           console.log('Monitor error:', error);
+          // Clean up subscription on error to prevent crash
+          if (monitorSubscriptionRef.current) {
+            try {
+              monitorSubscriptionRef.current.remove();
+              monitorSubscriptionRef.current = null;
+            } catch (e) {
+              console.log('Error removing subscription:', e);
+            }
+          }
           return;
         }
         if (characteristic?.value) {

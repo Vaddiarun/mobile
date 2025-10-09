@@ -1,0 +1,17 @@
+diff --git a/node_modules/react-native-ble-plx/android/src/main/java/com/bleplx/utils/SafePromise.java b/node_modules/react-native-ble-plx/android/src/main/java/com/bleplx/utils/SafePromise.java
+index 0000000..1111111 100644
+--- a/node_modules/react-native-ble-plx/android/src/main/java/com/bleplx/utils/SafePromise.java
++++ b/node_modules/react-native-ble-plx/android/src/main/java/com/bleplx/utils/SafePromise.java
+@@ -22,7 +22,11 @@ public class SafePromise {
+     }
+ 
+     public void reject(String code, String message) {
+-        promise.reject(code, message);
++        if (code == null) {
++            promise.reject("BLE_ERROR", message != null ? message : "Unknown BLE error");
++        } else {
++            promise.reject(code, message);
++        }
+     }
+ 
+     public void resolve(Object value) {

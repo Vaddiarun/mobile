@@ -24,7 +24,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import axios from 'axios';
 
-import { getUser, getTrips, saveTrip, updateTrip } from '../mmkv-storage/storage';
+import { getUser, getTrips, saveTrip, updateTrip, getData, clearData } from '../mmkv-storage/storage';
 import LoaderModal from '../components/LoaderModel';
 import StatusModal from '../components/StatusModel';
 import { BASE_URL } from '../services/apiClient';
@@ -38,23 +38,23 @@ type PacketsPayload = any;
 
 export default function TripConfiguration() {
   const router = useRouter();
-  const { packets: p, tripStatus: ts, deviceName: dn, packetsCount: pc } = useLocalSearchParams();
+  const { tripDataKey, tripStatus: ts, deviceName: dn } = useLocalSearchParams();
 
-  // Expo Router params arrive as strings. Parse if JSON strings were sent.
-  const packets: PacketsPayload = useMemo(() => {
-    try {
-      return typeof p === 'string' ? JSON.parse(p) : p;
-    } catch {
-      return p;
+  // Retrieve data from MMKV storage instead of params
+  const tripData = useMemo(() => {
+    if (typeof tripDataKey === 'string' && tripDataKey) {
+      const data = getData(tripDataKey);
+      // Clean up after retrieval
+      if (data) {
+        setTimeout(() => clearData(tripDataKey), 1000);
+      }
+      return data || {};
     }
-  }, [p]);
-  const packetsCount: any = useMemo(() => {
-    try {
-      return typeof pc === 'string' ? JSON.parse(pc) : pc;
-    } catch {
-      return pc;
-    }
-  }, [pc]);
+    return {};
+  }, [tripDataKey]);
+
+  const packets: PacketsPayload = tripData.packets || {};
+  const packetsCount: any = tripData.packetsCount || {};
 
   const deviceName = typeof dn === 'string' ? dn : '';
   const initialStatus: TripStatus = ((typeof ts === 'string' ? Number(ts) : ts) as TripStatus) ?? 0;
