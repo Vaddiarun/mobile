@@ -1,5 +1,5 @@
 // app/(tabs)/index.tsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Platform,
   PermissionsAndroid,
@@ -15,21 +15,64 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Camera } from 'react-native-vision-camera';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import { getUser, getTrips } from '../../mmkv-storage/storage';
 
 export default function Home() {
   const insets = useSafeAreaInsets();
   const tabH = useBottomTabBarHeight();
   const router = useRouter();
 
-  const tripOn = 7;
-  const tripOff = 4;
+  const [userName, setUserName] = useState('User');
+  const [tripOn, setTripOn] = useState(0);
+  const [tripOff, setTripOff] = useState(0);
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
-  const recentActivity = [
-    { id: 'TF8-02859', time: 'Jul 7, 10:25 AM', status: 'Turned on' },
-    { id: 'TF8-02858', time: 'Jul 7, 10:20 AM', status: 'Turned on' },
-    { id: 'TF8-02857', time: 'Jul 7, 10:15 AM', status: 'Turned on' },
-    { id: 'TF8-02856', time: 'Jul 7, 10:05 AM', status: 'Turned off' },
-  ];
+  const loadUserData = useCallback(() => {
+    const user = getUser();
+    if (user && user.data && user.data.user) {
+      setUserName(user.data.user.Username || 'User');
+    }
+
+    const trips = getTrips() || [];
+    const activeTrips = trips.filter((trip: any) => trip.status === 'Started');
+    const inactiveTrips = trips.filter((trip: any) => trip.status === 'Stopped');
+
+    setTripOn(activeTrips.length);
+    setTripOff(inactiveTrips.length);
+
+    const sortedTrips = [...trips]
+      .sort((a: any, b: any) => {
+        const timeA = a.stopTimestamp || a.timestamp || a.createdAt || 0;
+        const timeB = b.stopTimestamp || b.timestamp || b.createdAt || 0;
+        return timeB - timeA;
+      })
+      .slice(0, 4);
+
+    const formattedActivity = sortedTrips.map((trip: any) => ({
+      id: trip.deviceID || trip.tripName || '—',
+      time: formatDate(trip.stopTimestamp || trip.timestamp || trip.createdAt || Date.now()),
+      status: trip.status === 'Started' ? 'Turned on' : 'Turned off',
+    }));
+
+    setRecentActivity(formattedActivity);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+    }, [loadUserData])
+  );
+
+  const formatDate = (ts: number | string): string => {
+    const d = new Date(ts);
+    return d.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
 
   useEffect(() => {
     const req = async () => {
@@ -94,12 +137,13 @@ export default function Home() {
         {/* Greeting */}
         <View className="mb-6 flex-row items-start justify-between">
           <View>
-            <Text className="text-4xl font-bold text-black">Hello, David</Text>
+            <Text className="text-4xl font-bold text-black">Hello, {userName}</Text>
             <Text className="mt-1 text-sm text-gray-600">A quick look at your devices</Text>
           </View>
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Settings"
+            onPress={() => router.push('/settings' as any)}
             className="mt-4">
             <MaterialCommunityIcons name="cog-outline" size={30} color="#000" />
           </TouchableOpacity>
@@ -156,18 +200,26 @@ export default function Home() {
           </Text> */}
         </View>
 
-        {recentActivity.map((item) => (
-          <View key={item.id} className="flex-row justify-between border-b border-gray-200 py-3.5">
-            <Text className="flex-1 text-base font-semibold text-black">{item.id}</Text>
-            <Text className="flex-1 text-center text-[13px] text-gray-600">{item.time}</Text>
-            <View className="flex-1 flex-row items-center justify-end">
-              <View
-                className={`mr-1.5 h-3 w-3 rounded-full ${item.status === 'Turned on' ? 'bg-green-500' : 'bg-red-500'}`}
-              />
-              <Text className="text-[13px] text-black">{item.status}</Text>
+        {recentActivity.length > 0 ? (
+          recentActivity.map((item, index) => (
+            <View
+              key={`${item.id}-${index}`}
+              className="flex-row justify-between border-b border-gray-200 py-3.5">
+              <Text className="flex-1 text-base font-semibold text-black">{item.id}</Text>
+              <Text className="flex-1 text-center text-[13px] text-gray-600">{item.time}</Text>
+              <View className="flex-1 flex-row items-center justify-end">
+                <View
+                  className={`mr-1.5 h-3 w-3 rounded-full ${item.status === 'Turned on' ? 'bg-green-500' : 'bg-red-500'}`}
+                />
+                <Text className="text-[13px] text-black">{item.status}</Text>
+              </View>
             </View>
+          ))
+        ) : (
+          <View className="py-8">
+            <Text className="text-center text-sm text-gray-500">No recent activity</Text>
           </View>
-        ))}
+        )}
       </ScrollView>
     </SafeAreaView>
   );

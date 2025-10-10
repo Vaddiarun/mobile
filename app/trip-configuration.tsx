@@ -24,7 +24,14 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import axios from 'axios';
 
-import { getUser, getTrips, saveTrip, updateTrip, getData, clearData } from '../mmkv-storage/storage';
+import {
+  getUser,
+  getTrips,
+  saveTrip,
+  updateTrip,
+  getData,
+  clearData,
+} from '../mmkv-storage/storage';
 import LoaderModal from '../components/LoaderModel';
 import StatusModal from '../components/StatusModel';
 import { BASE_URL } from '../services/apiClient';
@@ -345,6 +352,29 @@ export default function TripConfiguration() {
     return Object.keys(e).length === 0;
   };
 
+  const hasConfiguration = () => {
+    return customer !== '' || box !== '';
+  };
+
+  const handleBackPress = () => {
+    if (statusTrip === 0 && hasConfiguration()) {
+      Alert.alert(
+        'Discard Configuration?',
+        'You have unsaved changes. Are you sure you want to go back?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => router.push('/(tabs)/qr-scanner'),
+          },
+        ]
+      );
+    } else {
+      router.push('/(tabs)/qr-scanner');
+    }
+  };
+
   const handleReset = () => {
     setCustomer('');
     setBox('');
@@ -505,7 +535,7 @@ export default function TripConfiguration() {
         <View className="flex-row items-center justify-between px-4 pb-2 pt-1">
           <Pressable
             className="h-10 w-10 items-center justify-center"
-            onPress={() => router.push('/(tabs)/qr-scanner')}
+            onPress={handleBackPress}
             accessibilityRole="button"
             accessibilityLabel="Back">
             <MaterialCommunityIcons name="arrow-left" size={22} color="#000" />

@@ -17,6 +17,7 @@ export default function RootLayout() {
         <Stack.Screen name="verifyotp" options={{ headerShown: false }} />
 
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="trip-configuration" options={{ headerShown: false }} />
         <Stack.Screen
           name="bluetooth-communication"

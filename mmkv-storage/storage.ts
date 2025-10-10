@@ -41,6 +41,16 @@ export const clearTrip = () => {
   storage.delete("trips");
 };
 
+export const clearAllTrips = () => {
+  storage.delete("trips");
+};
+
+export const deleteSelectedTrips = (deviceIDs: string[]) => {
+  const existingTrips = getTrips() || [];
+  const updatedTrips = existingTrips.filter((trip: any) => !deviceIDs.includes(trip.deviceID));
+  storage.set("trips", JSON.stringify(updatedTrips));
+};
+
 // Generic data storage for temporary trip data
 export const saveData = (key: string, data: any) => {
   storage.set(key, JSON.stringify(data));

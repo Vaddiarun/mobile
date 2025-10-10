@@ -3,14 +3,14 @@ import { View, Text, FlatList, TouchableOpacity, Pressable, Alert } from 'react-
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { getTrips, clearAllTrips } from '../../mmkv-storage/storage';
+import { getTrips, clearAllTrips, deleteSelectedTrips } from '../../mmkv-storage/storage';
 
 type TripRow = {
   id: string;
   deviceId: string;
-  timestamp: string; // e.g., "Jul 7, 10:25 AM"
+  timestamp: string;
   status: 'Started' | 'Stopped';
 };
 
@@ -21,6 +21,8 @@ export default function History() {
 
   const [tab, setTab] = useState<'all' | 'today'>('all');
   const [allData, setAllData] = useState<TripRow[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const loadTrips = useCallback(() => {
     const trips = getTrips?.() || [];
@@ -45,11 +47,44 @@ export default function History() {
           onPress: () => {
             clearAllTrips();
             setAllData([]);
+            setSelectedIds(new Set());
+            setSelectionMode(false);
             Alert.alert('Success', 'All trip history has been cleared.');
           },
         },
       ]
     );
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedIds.size === 0) {
+      Alert.alert('No Selection', 'Please select trips to delete.');
+      return;
+    }
+
+    Alert.alert('Delete Selected', `Are you sure you want to delete ${selectedIds.size} trip(s)?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          deleteSelectedTrips(Array.from(selectedIds));
+          setSelectedIds(new Set());
+          setSelectionMode(false);
+          loadTrips();
+        },
+      },
+    ]);
+  };
+
+  const toggleSelection = (deviceId: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(deviceId)) {
+      newSelected.delete(deviceId);
+    } else {
+      newSelected.add(deviceId);
+    }
+    setSelectedIds(newSelected);
   };
 
   useFocusEffect(
@@ -73,7 +108,18 @@ export default function History() {
   );
 
   const renderItem = ({ item }: { item: TripRow }) => (
-    <View className="flex-row items-center justify-between border-b border-gray-200 py-3">
+    <TouchableOpacity
+      onPress={() => selectionMode && toggleSelection(item.deviceId)}
+      className="flex-row items-center justify-between border-b border-gray-200 py-3">
+      {selectionMode && (
+        <View className="mr-2">
+          <MaterialIcons
+            name={selectedIds.has(item.deviceId) ? 'check-box' : 'check-box-outline-blank'}
+            size={24}
+            color={selectedIds.has(item.deviceId) ? '#1976D2' : '#666'}
+          />
+        </View>
+      )}
       <Text className="flex-1 text-[15px] font-semibold text-black">{item.deviceId}</Text>
       <Text className="flex-1 text-center text-[12px] text-gray-600">{item.timestamp}</Text>
       <View className="flex-1 flex-row items-center justify-end">
@@ -84,7 +130,7 @@ export default function History() {
         />
         <Text className="text-[12px] text-gray-700">{item.status}</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -92,15 +138,46 @@ export default function History() {
       {/* Header */}
       <View className="px-5 pt-2">
         <View className="mb-3 flex-row items-center justify-between">
-          <View className="w-9" />
-          <Text className="text-lg font-extrabold text-black">Device History</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Clear all history"
-            onPress={handleClearAllHistory}
-            className="h-9 w-9 items-center justify-center">
-            <MaterialCommunityIcons name="delete-outline" size={22} color="#d32f2f" />
-          </Pressable>
+          {selectionMode ? (
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel selection"
+                onPress={() => {
+                  setSelectionMode(false);
+                  setSelectedIds(new Set());
+                }}
+                className="h-9 w-9 items-center justify-center">
+                <MaterialIcons name="close" size={22} color="#666" />
+              </Pressable>
+              <Text className="text-lg font-extrabold text-black">{selectedIds.size} Selected</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Delete selected"
+                onPress={handleDeleteSelected}
+                className="h-9 w-9 items-center justify-center">
+                <MaterialCommunityIcons name="delete-outline" size={22} color="#d32f2f" />
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Select trips"
+                onPress={() => setSelectionMode(true)}
+                className="h-9 w-9 items-center justify-center">
+                <MaterialIcons name="check-box-outline-blank" size={22} color="#666" />
+              </Pressable>
+              <Text className="text-lg font-extrabold text-black">Device History</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Clear all history"
+                onPress={handleClearAllHistory}
+                className="h-9 w-9 items-center justify-center">
+                <MaterialCommunityIcons name="delete-outline" size={22} color="#d32f2f" />
+              </Pressable>
+            </>
+          )}
         </View>
       </View>
 

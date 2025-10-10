@@ -389,9 +389,24 @@ export default function BluetoothCommunication() {
           if (existingTrip) {
             tripOperationRef.current = 'STOP';
             console.log('Trip operation: STOP (found active trip in local storage)');
+          } else if (parsed.tripStatus === 0) {
+            tripOperationRef.current = 'START';
+            console.log('Trip operation: START (no active trip on device)');
           } else {
-            tripOperationRef.current = parsed.tripStatus === 0 ? 'START' : 'STOP';
-            console.log('Trip operation:', tripOperationRef.current, '(from device)');
+            // Device has active trip but no matching trip in storage (orphaned trip)
+            console.log(
+              '⚠️ Orphaned trip detected - device has active trip but no configuration in storage'
+            );
+            tripOperationRef.current = 'START';
+            console.log('Treating as START mode - will need to reset device trip');
+
+            // Send stop command to reset the device
+            const stopConfig = buildA3Packet(10, false).toString('base64');
+            await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, stopConfig);
+            console.log('Sent stop command to reset orphaned trip on device');
+
+            // Wait a bit for device to process
+            await new Promise((resolve) => setTimeout(resolve, 500));
           }
 
           await sendTimeResponse(
@@ -404,20 +419,19 @@ export default function BluetoothCommunication() {
 
         case 0xd2:
           if (tripOperationRef.current === 'START') {
+            // Start trip on device and then navigate to configuration
             const config = buildA3Packet(10, true).toString('base64');
             await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, config);
-            console.log('Trip started on device, waiting for confirmation...');
+            console.log('Sent start command to device (interval: 10s)');
 
-            await new Promise((resolve) => setTimeout(resolve, 1500));
+            await new Promise((resolve) => setTimeout(resolve, 500));
 
             await bleManager.cancelDeviceConnection(device.id);
-            console.log(
-              'Disconnected from device - it will continue recording and stay in fast advertising mode'
-            );
+            console.log('Disconnected from device - it will continue recording');
 
             hasNavigatedRef.current = true;
 
-            // Store data in MMKV instead of passing large JSON in params
+            // Navigate to trip configuration
             try {
               const { saveData } = require('../mmkv-storage/storage');
               const tripDataKey = `trip_data_${qrCode}_${Date.now()}`;
@@ -425,7 +439,7 @@ export default function BluetoothCommunication() {
                 packets: dataRef.current,
                 packetsCount: receivedPacketsCountRef.current,
               });
-              
+
               setTimeout(() => {
                 router.replace({
                   pathname: '/trip-configuration',
@@ -498,7 +512,7 @@ export default function BluetoothCommunication() {
                   packets: dataRef.current,
                   packetsCount: receivedPacketsCountRef.current,
                 });
-                
+
                 setTimeout(() => {
                   router.replace({
                     pathname: '/trip-configuration',
