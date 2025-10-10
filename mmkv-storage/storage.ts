@@ -26,9 +26,14 @@ export const saveTrip = (tripData: any) => {
  
 export const updateTrip = (deviceID: string, updates: any) => {
   const existingTrips = getTrips() || [];
-  const updatedTrips = existingTrips.map((trip: any) =>
-    trip.deviceID === deviceID ? { ...trip, ...updates } : trip
-  );
+  let updated = false;
+  const updatedTrips = existingTrips.map((trip: any) => {
+    if (!updated && trip.deviceID === deviceID && trip.status === 'Started') {
+      updated = true;
+      return { ...trip, ...updates };
+    }
+    return trip;
+  });
   storage.set("trips", JSON.stringify(updatedTrips));
 };
  

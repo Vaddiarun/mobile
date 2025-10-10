@@ -394,18 +394,21 @@ export default function BluetoothCommunication() {
             console.log('Trip operation: START (no active trip on device)');
           } else {
             // Device has active trip but no matching trip in storage (orphaned trip)
+            // This happens when:
+            // 1. User started a trip but backed out without completing configuration, OR
+            // 2. User scanned to stop but backed out without clicking "Stop Trip"
             console.log(
               '⚠️ Orphaned trip detected - device has active trip but no configuration in storage'
             );
             tripOperationRef.current = 'START';
-            console.log('Treating as START mode - will need to reset device trip');
+            console.log('Treating as START mode - will reset device trip and allow fresh start');
 
             // Send stop command to reset the device
             const stopConfig = buildA3Packet(10, false).toString('base64');
             await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, stopConfig);
-            console.log('Sent stop command to reset orphaned trip on device');
+            console.log('✅ Sent A3 stop command to reset orphaned trip on device');
 
-            // Wait a bit for device to process
+            // Wait a bit for device to process the stop command
             await new Promise((resolve) => setTimeout(resolve, 500));
           }
 
@@ -419,15 +422,11 @@ export default function BluetoothCommunication() {
 
         case 0xd2:
           if (tripOperationRef.current === 'START') {
-            // Start trip on device and then navigate to configuration
-            const config = buildA3Packet(10, true).toString('base64');
-            await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, config);
-            console.log('Sent start command to device (interval: 10s)');
-
-            await new Promise((resolve) => setTimeout(resolve, 500));
+            // DO NOT start trip on device yet - wait for user to click "Start Trip" button
+            console.log('⚠️ NOT sending A3 start yet - device ready, navigating to config');
 
             await bleManager.cancelDeviceConnection(device.id);
-            console.log('Disconnected from device - it will continue recording');
+            console.log('Disconnected from device - ready to start when user confirms');
 
             hasNavigatedRef.current = true;
 
@@ -494,14 +493,13 @@ export default function BluetoothCommunication() {
               ack
             );
             if (ok) {
-              const stop = buildA3Packet(10, false).toString('base64');
-              await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, stop);
               tripOperationRef.current = 'IDLE';
               console.log(
                 'Navigating to trip configuration - STOP, packets:',
                 packetsArrayRef.current.length
               );
               console.log('Trip data collected:', JSON.stringify(dataRef.current, null, 2));
+              console.log('⚠️ NOT sending A3 stop yet - waiting for user to click Stop Trip');
               hasNavigatedRef.current = true;
 
               // Store data in MMKV instead of passing large JSON in params

@@ -29,7 +29,11 @@ export default function History() {
     const formatted: TripRow[] = trips.map((trip: any, index: number) => ({
       id: String(index + 1),
       deviceId: String(trip.deviceID ?? '—'),
-      timestamp: formatDate(trip.stopTimestamp ?? trip.timestamp ?? trip.createdAt ?? Date.now()),
+      timestamp: formatDate(
+        trip.status === 'Stopped'
+          ? (trip.stopTimestamp ?? trip.timestamp ?? trip.createdAt ?? Date.now())
+          : (trip.timestamp ?? trip.createdAt ?? Date.now())
+      ),
       status: trip.status || 'Started',
     }));
     setAllData(formatted);

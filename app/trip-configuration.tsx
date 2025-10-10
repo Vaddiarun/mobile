@@ -37,6 +37,9 @@ import StatusModal from '../components/StatusModel';
 import { BASE_URL } from '../services/apiClient';
 import { EndPoints } from '../services/endPoints';
 import { Buffer } from 'buffer';
+import { BleManager } from 'react-native-ble-plx';
+
+const bleManager = new BleManager();
 
 const VITE_GOOGLE_API_KEY = 'AIzaSyDsqWho-EyUaPIe2Sxp8X2tw4x7SCLOW-A';
 
@@ -400,7 +403,7 @@ export default function TripConfiguration() {
     router.replace('/(tabs)');
   };
 
-  const handleStartTrip = () => {
+  const handleStartTrip = async () => {
     if (!validateForm()) return;
 
     const tripConfig = {
@@ -436,6 +439,73 @@ export default function TripConfiguration() {
     console.log('  Token:', user?.data?.token ? `${user.data.token.substring(0, 20)}...` : 'none');
 
     setApiLoading(true);
+
+    try {
+      // First, send A3 start command to device
+      console.log('🔵 Connecting to device to send start command...');
+      const devices = await bleManager.connectedDevices([]);
+      let targetDevice = devices.find((d) => d.name === deviceName);
+
+      if (!targetDevice) {
+        console.log('Device not connected, scanning...');
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            bleManager.stopDeviceScan();
+            reject(new Error('Device not found'));
+          }, 10000);
+
+          bleManager.startDeviceScan(null, null, async (error, device) => {
+            if (error) {
+              clearTimeout(timeout);
+              bleManager.stopDeviceScan();
+              reject(error);
+              return;
+            }
+            if (device?.name === deviceName) {
+              clearTimeout(timeout);
+              bleManager.stopDeviceScan();
+              targetDevice = device;
+              resolve();
+            }
+          });
+        });
+      }
+
+      if (targetDevice) {
+        const connected = await targetDevice.connect();
+        await connected.discoverAllServicesAndCharacteristics();
+        const services = await connected.services();
+        const service = services[2] || services[0];
+        const chars = await connected.characteristicsForService(service.uuid);
+        const rxChar = chars.find((c) => c.isWritableWithResponse);
+
+        if (rxChar) {
+          // Build and send A3 start packet
+          const startBuffer = Buffer.alloc(9);
+          let offset = 0;
+          startBuffer.writeUInt8(0xa3, offset++);
+          startBuffer.writeUInt8(0x07, offset++);
+          startBuffer.writeUInt16LE(10, offset); // 10 second interval
+          offset += 2;
+          startBuffer.writeUInt8(1, offset++); // tripOn = true
+          startBuffer.writeUInt32LE(0, offset);
+          const startCommand = startBuffer.toString('base64');
+
+          await connected.writeCharacteristicWithResponseForService(
+            service.uuid,
+            rxChar.uuid,
+            startCommand
+          );
+          console.log('✅ Sent A3 start command to device (interval: 10s)');
+          await bleManager.cancelDeviceConnection(connected.id);
+        }
+      }
+    } catch (bleError) {
+      console.log('⚠️ BLE error (device may already be started):', bleError);
+      // Continue with API call even if BLE fails
+    }
+
+    // Now make the API call
     axios
       .post(`${BASE_URL}/${EndPoints.START_TRIP}`, body, {
         headers: { Authorization: `Bearer ${user?.data?.token}` },
@@ -456,7 +526,7 @@ export default function TripConfiguration() {
       .finally(() => setApiLoading(false));
   };
 
-  const handleStopTrip = () => {
+  const handleStopTrip = async () => {
     if (stopLat.latitude === 0) {
       Alert.alert('Location', 'Location is required');
       return;
@@ -501,6 +571,73 @@ export default function TripConfiguration() {
     console.log('  Token:', user?.data?.token ? `${user.data.token.substring(0, 20)}...` : 'none');
 
     setApiLoading(true);
+
+    try {
+      // First, send A3 stop command to device
+      console.log('🔵 Connecting to device to send stop command...');
+      const devices = await bleManager.connectedDevices([]);
+      let targetDevice = devices.find((d) => d.name === deviceName);
+
+      if (!targetDevice) {
+        console.log('Device not connected, scanning...');
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            bleManager.stopDeviceScan();
+            reject(new Error('Device not found'));
+          }, 10000);
+
+          bleManager.startDeviceScan(null, null, async (error, device) => {
+            if (error) {
+              clearTimeout(timeout);
+              bleManager.stopDeviceScan();
+              reject(error);
+              return;
+            }
+            if (device?.name === deviceName) {
+              clearTimeout(timeout);
+              bleManager.stopDeviceScan();
+              targetDevice = device;
+              resolve();
+            }
+          });
+        });
+      }
+
+      if (targetDevice) {
+        const connected = await targetDevice.connect();
+        await connected.discoverAllServicesAndCharacteristics();
+        const services = await connected.services();
+        const service = services[2] || services[0];
+        const chars = await connected.characteristicsForService(service.uuid);
+        const rxChar = chars.find((c) => c.isWritableWithResponse);
+
+        if (rxChar) {
+          // Build and send A3 stop packet
+          const stopBuffer = Buffer.alloc(9);
+          let offset = 0;
+          stopBuffer.writeUInt8(0xa3, offset++);
+          stopBuffer.writeUInt8(0x07, offset++);
+          stopBuffer.writeUInt16LE(10, offset); // 10 second interval
+          offset += 2;
+          stopBuffer.writeUInt8(0, offset++); // tripOn = false (STOP)
+          stopBuffer.writeUInt32LE(0, offset);
+          const stopCommand = stopBuffer.toString('base64');
+
+          await connected.writeCharacteristicWithResponseForService(
+            service.uuid,
+            rxChar.uuid,
+            stopCommand
+          );
+          console.log('✅ Sent A3 stop command to device');
+          await bleManager.cancelDeviceConnection(connected.id);
+        }
+      }
+    } catch (bleError) {
+      console.log('⚠️ BLE error (device may already be stopped):', bleError);
+      // Continue with API call even if BLE fails
+    }
+
+    // Now make the API call
     axios
       .post(`${BASE_URL}/${EndPoints.STOP_TRIP}`, body, {
         headers: {
@@ -580,7 +717,7 @@ export default function TripConfiguration() {
                   height: 205,
                 }}
                 renderItem={(item: any) => (
-                  <Text key={item.id} style={{ color: '#000', padding: 15 }}>
+                  <Text key={`customer-${item.id}`} style={{ color: '#000', padding: 15 }}>
                     {item.customerProfile.profileName}
                   </Text>
                 )}
@@ -621,7 +758,9 @@ export default function TripConfiguration() {
                     height: 205,
                   }}
                   renderItem={(item: any) => (
-                    <Text key={item.id} style={{ color: '#000', padding: 15 }}>
+                    <Text
+                      key={`box-${item.id || item.boxProfile?.profileName}`}
+                      style={{ color: '#000', padding: 15 }}>
                       {item?.boxProfile?.profileName}
                     </Text>
                   )}
