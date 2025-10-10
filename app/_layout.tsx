@@ -21,7 +21,7 @@ export default function RootLayout() {
         <Stack.Screen name="trip-configuration" options={{ headerShown: false }} />
         <Stack.Screen
           name="bluetooth-communication"
-          options={{ title: 'Mobile to Sensor', headerTitleAlign: 'center', headerShown: false }}
+          options={{ title: 'Mobile to Sensor', headerShown: false }}
         />
       </Stack>
     </SafeAreaProvider>

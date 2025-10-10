@@ -39,6 +39,39 @@ export default function History() {
     setAllData(formatted);
   }, []);
 
+  // const loadTrips = useCallback(() => {
+  //   const trips = getTrips?.() || [];
+  //   const formatted: TripRow[] = trips.map((trip: any, index: number) => ({
+  //     id: String(index + 1),
+  //     deviceId: String(trip.deviceID ?? '—'),
+  //     timestamp: formatDate(
+  //       trip.status === 'Stopped'
+  //         ? (trip.stopTimestamp ?? trip.timestamp ?? trip.createdAt ?? Date.now())
+  //         : (trip.timestamp ?? trip.createdAt ?? Date.now())
+  //     ),
+  //     status: trip.status || 'Started',
+  //   }));
+
+  //   // 🧪 DUMMY DATA for testing — comment out later
+  //   const dummy: TripRow[] = [
+  //     {
+  //       id: '9991',
+  //       deviceId: 'TEST-1',
+  //       timestamp: formatDate(Date.now()),
+  //       status: 'Started',
+  //     },
+  //     {
+  //       id: '9992',
+  //       deviceId: 'TEST-2',
+  //       timestamp: formatDate(Date.now() - 1000 * 60 * 60),
+  //       status: 'Stopped',
+  //     },
+  //   ];
+
+  //   // merge real + dummy
+  //   setAllData([...formatted, ...dummy]);
+  // }, []);
+
   const handleClearAllHistory = () => {
     Alert.alert(
       'Clear All History',
@@ -124,7 +157,7 @@ export default function History() {
           });
         }
       }}
-      className="flex-row items-center justify-between border-b border-gray-200 py-3">
+      className="border-1 my-1 flex-row items-center justify-between border-b border-gray-500 py-3 ">
       {selectionMode && (
         <View className="mr-2">
           <MaterialIcons
@@ -222,7 +255,7 @@ export default function History() {
         </View>
 
         {/* Table container */}
-        <View className="flex-1 rounded-[30px] bg-[#e6e6e6] p-2">
+        <View className="mb-14 flex-1 rounded-[30px] bg-[#e6e6e6] p-2">
           {/* Header row */}
           <View className="mx-auto mt-2 w-[90%] flex-row">
             <Text className="flex-[1.5] text-[14px] font-bold text-black">Device ID</Text>
