@@ -38,6 +38,7 @@ import { BASE_URL } from '../services/apiClient';
 import { EndPoints } from '../services/endPoints';
 import { Buffer } from 'buffer';
 import { BleManager } from 'react-native-ble-plx';
+import { bleSessionStore } from '../services/BleSessionStore';
 
 const bleManager = new BleManager();
 
@@ -443,43 +444,72 @@ export default function TripConfiguration() {
     try {
       // First, send A3 start command to device
       console.log('🔵 Connecting to device to send start command...');
-      const devices = await bleManager.connectedDevices([]);
-      let targetDevice = devices.find((d) => d.name === deviceName);
 
-      if (!targetDevice) {
-        console.log('Device not connected, scanning...');
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            bleManager.stopDeviceScan();
-            reject(new Error('Device not found'));
-          }, 10000);
+      // Try to use cached session for faster reconnect
+      const session = bleSessionStore.getSession();
+      let connected;
 
-          bleManager.startDeviceScan(null, null, async (error, device) => {
-            if (error) {
-              clearTimeout(timeout);
-              bleManager.stopDeviceScan();
-              reject(error);
-              return;
-            }
-            if (device?.name === deviceName) {
-              clearTimeout(timeout);
-              bleManager.stopDeviceScan();
-              targetDevice = device;
-              resolve();
-            }
-          });
-        });
+      if (session && session.deviceName === deviceName) {
+        console.log('📝 Using cached session, attempting quick reconnect...');
+        try {
+          connected = await bleManager.devices([session.deviceId]).then((devices) => devices[0]);
+          if (!connected) {
+            connected = await bleManager.connectToDevice(session.deviceId);
+          }
+          await connected.discoverAllServicesAndCharacteristics();
+          console.log('✅ Quick reconnect successful');
+        } catch (e) {
+          console.log('⚠️ Cached session failed, falling back to scan');
+          connected = null;
+        }
       }
 
-      if (targetDevice) {
-        const connected = await targetDevice.connect();
-        await connected.discoverAllServicesAndCharacteristics();
-        const services = await connected.services();
-        const service = services[2] || services[0];
-        const chars = await connected.characteristicsForService(service.uuid);
-        const rxChar = chars.find((c) => c.isWritableWithResponse);
+      // Fallback to scanning if no session or reconnect failed
+      if (!connected) {
+        console.log('Scanning for device...');
+        const devices = await bleManager.connectedDevices([]);
+        let targetDevice = devices.find((d) => d.name === deviceName);
 
-        if (rxChar) {
+        if (!targetDevice) {
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              bleManager.stopDeviceScan();
+              reject(new Error('Device not found'));
+            }, 10000);
+
+            bleManager.startDeviceScan(null, null, async (error, device) => {
+              if (error) {
+                clearTimeout(timeout);
+                bleManager.stopDeviceScan();
+                reject(error);
+                return;
+              }
+              if (device?.name === deviceName) {
+                clearTimeout(timeout);
+                bleManager.stopDeviceScan();
+                targetDevice = device;
+                resolve();
+              }
+            });
+          });
+        }
+
+        if (targetDevice) {
+          connected = await targetDevice.connect();
+          await connected.discoverAllServicesAndCharacteristics();
+        }
+      }
+
+      if (connected) {
+        const serviceUUID =
+          session?.serviceUUID || (await connected.services()).find((s) => s.uuid)?.uuid;
+        const rxUUID =
+          session?.rxUUID ||
+          (await connected.characteristicsForService(serviceUUID!)).find(
+            (c) => c.isWritableWithResponse
+          )?.uuid;
+
+        if (serviceUUID && rxUUID) {
           // Build and send A3 start packet
           const startBuffer = Buffer.alloc(9);
           let offset = 0;
@@ -492,8 +522,8 @@ export default function TripConfiguration() {
           const startCommand = startBuffer.toString('base64');
 
           await connected.writeCharacteristicWithResponseForService(
-            service.uuid,
-            rxChar.uuid,
+            serviceUUID,
+            rxUUID,
             startCommand
           );
           console.log('✅ Sent A3 start command to device (interval: 10s)');
@@ -575,43 +605,72 @@ export default function TripConfiguration() {
     try {
       // First, send A3 stop command to device
       console.log('🔵 Connecting to device to send stop command...');
-      const devices = await bleManager.connectedDevices([]);
-      let targetDevice = devices.find((d) => d.name === deviceName);
 
-      if (!targetDevice) {
-        console.log('Device not connected, scanning...');
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            bleManager.stopDeviceScan();
-            reject(new Error('Device not found'));
-          }, 10000);
+      // Try to use cached session for faster reconnect
+      const session = bleSessionStore.getSession();
+      let connected;
 
-          bleManager.startDeviceScan(null, null, async (error, device) => {
-            if (error) {
-              clearTimeout(timeout);
-              bleManager.stopDeviceScan();
-              reject(error);
-              return;
-            }
-            if (device?.name === deviceName) {
-              clearTimeout(timeout);
-              bleManager.stopDeviceScan();
-              targetDevice = device;
-              resolve();
-            }
-          });
-        });
+      if (session && session.deviceName === deviceName) {
+        console.log('📝 Using cached session, attempting quick reconnect...');
+        try {
+          connected = await bleManager.devices([session.deviceId]).then((devices) => devices[0]);
+          if (!connected) {
+            connected = await bleManager.connectToDevice(session.deviceId);
+          }
+          await connected.discoverAllServicesAndCharacteristics();
+          console.log('✅ Quick reconnect successful');
+        } catch (e) {
+          console.log('⚠️ Cached session failed, falling back to scan');
+          connected = null;
+        }
       }
 
-      if (targetDevice) {
-        const connected = await targetDevice.connect();
-        await connected.discoverAllServicesAndCharacteristics();
-        const services = await connected.services();
-        const service = services[2] || services[0];
-        const chars = await connected.characteristicsForService(service.uuid);
-        const rxChar = chars.find((c) => c.isWritableWithResponse);
+      // Fallback to scanning if no session or reconnect failed
+      if (!connected) {
+        console.log('Scanning for device...');
+        const devices = await bleManager.connectedDevices([]);
+        let targetDevice = devices.find((d) => d.name === deviceName);
 
-        if (rxChar) {
+        if (!targetDevice) {
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              bleManager.stopDeviceScan();
+              reject(new Error('Device not found'));
+            }, 10000);
+
+            bleManager.startDeviceScan(null, null, async (error, device) => {
+              if (error) {
+                clearTimeout(timeout);
+                bleManager.stopDeviceScan();
+                reject(error);
+                return;
+              }
+              if (device?.name === deviceName) {
+                clearTimeout(timeout);
+                bleManager.stopDeviceScan();
+                targetDevice = device;
+                resolve();
+              }
+            });
+          });
+        }
+
+        if (targetDevice) {
+          connected = await targetDevice.connect();
+          await connected.discoverAllServicesAndCharacteristics();
+        }
+      }
+
+      if (connected) {
+        const serviceUUID =
+          session?.serviceUUID || (await connected.services()).find((s) => s.uuid)?.uuid;
+        const rxUUID =
+          session?.rxUUID ||
+          (await connected.characteristicsForService(serviceUUID!)).find(
+            (c) => c.isWritableWithResponse
+          )?.uuid;
+
+        if (serviceUUID && rxUUID) {
           // Build and send A3 stop packet
           const stopBuffer = Buffer.alloc(9);
           let offset = 0;
@@ -624,8 +683,8 @@ export default function TripConfiguration() {
           const stopCommand = stopBuffer.toString('base64');
 
           await connected.writeCharacteristicWithResponseForService(
-            service.uuid,
-            rxChar.uuid,
+            serviceUUID,
+            rxUUID,
             stopCommand
           );
           console.log('✅ Sent A3 stop command to device');
@@ -651,6 +710,10 @@ export default function TripConfiguration() {
           status: 'Stopped',
           stopTimestamp: Date.now(),
           stopLocation: stopLat,
+          data: dataString, // Save data for trip detail view
+          packets: actualPackets, // Save actual packets for easier access
+          batteryPercentage: packetsCount?.expected?.batteryPercentage ?? 0,
+          totalPackets: actualTotalPackets,
         });
         setModalType('success');
         setModelLoader(true);

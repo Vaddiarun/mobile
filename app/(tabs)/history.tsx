@@ -113,7 +113,17 @@ export default function History() {
 
   const renderItem = ({ item }: { item: TripRow }) => (
     <TouchableOpacity
-      onPress={() => selectionMode && toggleSelection(item.deviceId)}
+      onPress={() => {
+        if (selectionMode) {
+          toggleSelection(item.deviceId);
+        } else {
+          // Navigate to trip detail screen
+          router.push({
+            pathname: '/trip-detail',
+            params: { tripIndex: String(parseInt(item.id) - 1) },
+          });
+        }
+      }}
       className="flex-row items-center justify-between border-b border-gray-200 py-3">
       {selectionMode && (
         <View className="mr-2">

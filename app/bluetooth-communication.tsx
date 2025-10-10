@@ -3,6 +3,7 @@ import { View, Animated, Easing, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { BleManager, Device } from 'react-native-ble-plx';
 import { Buffer } from 'buffer';
+import { bleSessionStore } from '../services/BleSessionStore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import LoaderModal from '../components/LoaderModel';
 import StatusModal from '../components/StatusModel';
@@ -146,7 +147,10 @@ export default function BluetoothCommunication() {
 
             // Add disconnection listener to prevent crash
             connectedDevice.onDisconnected((error, device) => {
-              console.log('Device disconnected:', device?.name, error?.message);
+              // Only log if there's an actual error (not manual disconnect)
+              if (error || device?.name) {
+                console.log('Device disconnected:', device?.name, error?.message);
+              }
               if (monitorSubscriptionRef.current && !hasNavigatedRef.current) {
                 try {
                   monitorSubscriptionRef.current.remove();
@@ -173,6 +177,17 @@ export default function BluetoothCommunication() {
 
             if (txChar?.uuid && rxChar?.uuid) {
               console.log('Starting packet communication...');
+
+              // Cache BLE session for faster reconnection
+              bleSessionStore.setSession({
+                deviceId: connectedDevice.id,
+                deviceName: qrCode as string,
+                serviceUUID: service.uuid,
+                rxUUID: rxChar.uuid,
+                txUUID: txChar.uuid,
+                timestamp: Date.now(),
+              });
+
               startPacket(connectedDevice, service.uuid, txChar.uuid, rxChar.uuid);
             } else {
               console.error('Required characteristics not found');
