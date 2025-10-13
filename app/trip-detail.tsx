@@ -168,6 +168,14 @@ export default function TripDetail() {
             </Text>
           </View>
         )}
+        {trip.tripConfig?.boxProfile && (
+          <View className="mt-1 flex-row items-center">
+            <MaterialCommunityIcons name="package-variant" size={16} color="#666" />
+            <Text className="ml-1 text-sm text-gray-600">
+              {trip.tripConfig.boxProfile.profileName}
+            </Text>
+          </View>
+        )}
         <View className="mt-1 flex-row items-center">
           <MaterialCommunityIcons name="map-marker" size={16} color="#666" />
           <Text className="ml-1 text-sm text-gray-600">{trip.location || 'No location'}</Text>
@@ -198,7 +206,7 @@ export default function TripDetail() {
 
         {packets.length === 0 ? (
           <View className="flex-1 items-center justify-center">
-            <Text className="text-gray-400">No data available</Text>
+            <Text className="text-gray-400">Please stop trip to view records</Text>
           </View>
         ) : (
           <FlatList
