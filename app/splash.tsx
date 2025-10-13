@@ -14,7 +14,7 @@ export default function Splash() {
       if (user && user.data && user.data.token) {
         router.replace('/(tabs)');
       } else {
-        router.replace('/login');
+        router.replace('/register');
       }
     };
 

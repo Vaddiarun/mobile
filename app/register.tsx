@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable, Image, Alert } from 'react-native';
+import { View, Text, TextInput, Pressable, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import { BASE_URL } from '../services/apiClient';
 import { EndPoints } from '../services/endPoints';
+import CustomModal from '../components/CustomModal';
 
 export default function Register() {
   const router = useRouter();
@@ -12,6 +13,12 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [mobile, setMobile] = useState('');
   const [errors, setErrors] = useState<{ name?: string; email?: string; mobile?: string }>({});
+  const [modal, setModal] = useState<{
+    visible: boolean;
+    type: 'success' | 'error' | 'info' | 'warning';
+    title: string;
+    message: string;
+  }>({ visible: false, type: 'info', title: '', message: '' });
 
   const validateName = (val: string) =>
     !val.trim() ? 'Name is required' : val.length < 4 ? 'At least 4 characters' : '';
@@ -46,19 +53,31 @@ export default function Register() {
         phone: formattedPhone,
       });
 
-      Alert.alert('Thinxlog', 'OTP sent to your mobile number. Check your phone.', [
-        {
-          text: 'OK',
-          onPress: () =>
-            router.push({ pathname: '/verifyotp', params: { name, email, phone: mobile } }),
-        },
-      ]);
+      setModal({
+        visible: true,
+        type: 'success',
+        title: 'OTP Sent',
+        message: 'OTP has been sent to your mobile number. Please check your phone.',
+      });
     } catch (e: any) {
       if (axios.isAxiosError(e)) {
         console.log('Register error:', e.response?.data || e.message);
-        Alert.alert('Error', e.response?.data?.message || 'Registration failed');
+        const errorMsg = e.response?.data?.message || 'Registration failed';
+        setModal({
+          visible: true,
+          type: 'error',
+          title: 'Registration Failed',
+          message: errorMsg.includes('already')
+            ? 'This phone number is already registered. Please login instead.'
+            : errorMsg,
+        });
       } else {
-        Alert.alert('Error', 'Something went wrong');
+        setModal({
+          visible: true,
+          type: 'error',
+          title: 'Error',
+          message: 'Something went wrong. Please try again.',
+        });
       }
     } finally {
       setLoading(false);
@@ -67,14 +86,16 @@ export default function Register() {
 
   return (
     <View className="flex-1 bg-white px-6 pt-20">
-      <View className="mb-8">
+      <View className="mb-8 items-center">
         <Image
           source={require('../assets/images/Glogo.png')}
-          className="mb-3 h-14 w-14 opacity-50"
+          className="h-26 w-26 mb-3 mt-6"
           resizeMode="contain"
         />
         <Text className="text-2xl font-bold text-gray-700">Create your account</Text>
-        <Text className="mt-1 text-gray-500">It only takes a moment to set things up.</Text>
+        <Text className="mt-1 text-center text-gray-500">
+          It only takes a moment to set things up.
+        </Text>
       </View>
 
       {[
@@ -125,6 +146,19 @@ export default function Register() {
           {loading ? 'Loading...' : 'Register'}
         </Text>
       </Pressable>
+
+      <CustomModal
+        visible={modal.visible}
+        type={modal.type}
+        title={modal.title}
+        message={modal.message}
+        onClose={() => {
+          setModal({ ...modal, visible: false });
+          if (modal.type === 'success') {
+            router.push({ pathname: '/verifyotp', params: { name, email, phone: mobile } });
+          }
+        }}
+      />
     </View>
   );
 }

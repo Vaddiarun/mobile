@@ -86,9 +86,7 @@ export default function VerifyOTP() {
         console.log('   User:', userData.data.user);
         saveUser(userData);
 
-        Alert.alert('Success', 'Account verified successfully!', [
-          { text: 'OK', onPress: () => router.replace('/(tabs)') },
-        ]);
+        router.replace('/otp-success');
       } else {
         console.error('❌ Invalid response:', res.data);
         setError('OTP verification failed');
@@ -119,7 +117,7 @@ export default function VerifyOTP() {
 
   return (
     <View className="flex-1 bg-white px-6 pt-20">
-      <Text className="mb-1 text-2xl font-bold text-gray-700">Verify your number</Text>
+      <Text className="mb-1 mt-[200px] text-4xl font-bold text-gray-700">Verify your number</Text>
       <Text className="mb-8 text-gray-500">We’ve sent a code to +91 {phone}</Text>
 
       <View className="mb-4 flex-row justify-between">

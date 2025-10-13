@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Pressable, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { getUser, clearUser } from '../mmkv-storage/storage';
+import CustomModal from '../components/CustomModal';
 
 export default function Settings() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     const userData = getUser();
@@ -15,17 +17,13 @@ export default function Settings() {
   }, []);
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: () => {
-          clearUser();
-          router.replace('/splash');
-        },
-      },
-    ]);
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = () => {
+    clearUser();
+    router.replace('/splash');
+    setShowLogoutModal(false);
   };
 
   const formatDate = (timestamp: number | string): string => {
@@ -127,6 +125,17 @@ export default function Settings() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <CustomModal
+        visible={showLogoutModal}
+        type="warning"
+        title="Logout"
+        message="Are you sure you want to logout?"
+        onClose={() => setShowLogoutModal(false)}
+        buttonText="Cancel"
+        onConfirm={confirmLogout}
+        confirmText="Logout"
+      />
     </SafeAreaView>
   );
 }

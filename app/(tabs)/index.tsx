@@ -137,7 +137,7 @@ export default function Home() {
         {/* Greeting */}
         <View className="mb-6 flex-row items-start justify-between">
           <View>
-            <Text className="text-4xl font-bold text-black">Hello, {userName}</Text>
+            <Text className="text-4xl font-semibold text-black">Hello, {userName}</Text>
             <Text className="mt-1 text-sm text-gray-600">A quick look at your devices</Text>
           </View>
           <TouchableOpacity
@@ -156,14 +156,16 @@ export default function Home() {
             <View className="flex-1 items-start">
               <Text className="text-xl font-semibold text-neutral-900">Trip On</Text>
               <Text className="text-md mb-1 text-gray-600">Active devices</Text>
-              <Text className="text-6xl font-extrabold text-blue-600">
+              <Text className="text-6xl font-semibold text-blue-600">
                 {tripOn.toString().padStart(2, '0')}
               </Text>
             </View>
             <View className="flex-1 items-start">
-              <Text className="text-xl font-semibold text-neutral-900">Trip Off</Text>
+              <Text className="text-xl font-semibold text-neutral-900" numberOfLines={1}>
+                Trip Off
+              </Text>
               <Text className="text-md mb-1 text-gray-600">Inactive devices</Text>
-              <Text className="text-6xl font-extrabold text-blue-600">
+              <Text className="text-6xl font-semibold text-blue-600">
                 {tripOff.toString().padStart(2, '0')}
               </Text>
             </View>
