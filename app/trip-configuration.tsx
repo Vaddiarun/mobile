@@ -360,7 +360,19 @@ export default function TripConfiguration() {
     return customer !== '' || box !== '';
   };
 
-  const handleBackPress = () => {
+  const handleBackPress = async () => {
+    // Disconnect device and clear active connection if user goes back without stopping
+    const activeConn = bleSessionStore.getActiveConnection();
+    if (activeConn) {
+      try {
+        await bleManager.cancelDeviceConnection(activeConn.device.id);
+        console.log('🔌 Disconnected device on back press');
+      } catch (e) {
+        console.log('ℹ️ Device already disconnected');
+      }
+      bleSessionStore.clearActiveConnection();
+    }
+
     if (statusTrip === 0 && hasConfiguration()) {
       Alert.alert(
         'Discard Configuration?',
@@ -515,7 +527,7 @@ export default function TripConfiguration() {
           let offset = 0;
           startBuffer.writeUInt8(0xa3, offset++);
           startBuffer.writeUInt8(0x07, offset++);
-          startBuffer.writeUInt16LE(10, offset); // 10 second interval
+          startBuffer.writeUInt16LE(60, offset); // 60 second interval
           offset += 2;
           startBuffer.writeUInt8(1, offset++); // tripOn = true
           startBuffer.writeUInt32LE(0, offset);
@@ -526,7 +538,7 @@ export default function TripConfiguration() {
             rxUUID,
             startCommand
           );
-          console.log('✅ Sent A3 start command to device (interval: 10s)');
+          console.log('✅ Sent A3 start command to device (interval: 60s)');
           await bleManager.cancelDeviceConnection(connected.id);
         }
       }
@@ -562,13 +574,6 @@ export default function TripConfiguration() {
       return;
     }
 
-    const actualPackets = packets?.packets || [];
-    const bufferOne = Buffer.from(JSON.stringify(actualPackets));
-    const dataString = Array.from(bufferOne).join(',');
-
-    const actualTotalPackets = packetsCount?.expected?.totalPackets ?? actualPackets.length ?? 0;
-
-    // Find the active trip for this device
     const activeTrip = allTrips.find(
       (trip: any) => trip.deviceID === deviceName && trip.status === 'Started'
     );
@@ -578,123 +583,171 @@ export default function TripConfiguration() {
       return;
     }
 
+    setApiLoading(true);
+
+    let actualPackets: any[] = [];
+    let actualTotalPackets = 0;
+    let batteryPercentage = 0;
+    let payloadLength: number | undefined;
+
+    try {
+      console.log('🔵 Using active connection to request data and send stop command...');
+
+      const activeConn = bleSessionStore.getActiveConnection();
+      if (!activeConn) {
+        throw new Error('No active connection available');
+      }
+
+      const { device: connected, serviceUUID, rxUUID, txUUID } = activeConn;
+      const collectedPackets: any[] = [];
+      let d4Info: any = null;
+
+      // Request data from device
+      console.log('📥 Requesting data from device...');
+
+      const dataPromise = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Data request timeout'));
+        }, 15000);
+
+        const subscription = connected.monitorCharacteristicForService(
+          serviceUUID,
+          txUUID,
+          async (error, characteristic) => {
+            if (error) {
+              clearTimeout(timeout);
+              subscription.remove();
+              reject(error);
+              return;
+            }
+            if (characteristic?.value) {
+              const raw = Buffer.from(characteristic.value, 'base64');
+              const packetType = raw[0];
+
+              if (packetType === 0xd4) {
+                const parsed = {
+                  totalPackets: raw.readUInt16LE(12),
+                  batteryPercentage: raw.readUInt8(18),
+                };
+                d4Info = parsed;
+                console.log('📦 D4: Total packets:', parsed.totalPackets);
+                const ack = Buffer.alloc(6);
+                ack.writeUInt8(0xa5, 0);
+                ack.writeUInt8(0x06, 1);
+                ack.writeUInt32LE(0, 2);
+                await connected.writeCharacteristicWithResponseForService(
+                  serviceUUID,
+                  rxUUID,
+                  ack.toString('base64')
+                );
+              } else if (packetType === 0xd5) {
+                let o = 2;
+                const num = raw.readUInt8(o++);
+                for (let i = 0; i < num; i++) {
+                  const time = raw.readUInt32LE(o);
+                  o += 4;
+                  const temperature = raw.readInt16LE(o) / 10;
+                  o += 2;
+                  const humidity = raw.readUInt8(o++);
+                  collectedPackets.push({ time, temperature, humidity });
+                }
+                console.log('📦 D5: Collected', num, 'packets, total:', collectedPackets.length);
+                const ack = Buffer.alloc(6);
+                ack.writeUInt8(0xa5, 0);
+                ack.writeUInt8(0x06, 1);
+                ack.writeUInt32LE(0, 2);
+                await connected.writeCharacteristicWithResponseForService(
+                  serviceUUID,
+                  rxUUID,
+                  ack.toString('base64')
+                );
+              } else if (packetType === 0xd6) {
+                console.log('📦 D6: Data transfer complete');
+                const ack = Buffer.alloc(6);
+                ack.writeUInt8(0xa5, 0);
+                ack.writeUInt8(0x06, 1);
+                ack.writeUInt32LE(0, 2);
+                await connected.writeCharacteristicWithResponseForService(
+                  serviceUUID,
+                  rxUUID,
+                  ack.toString('base64')
+                );
+
+                // Send stop command immediately while still connected
+                const stopBuffer = Buffer.alloc(9);
+                stopBuffer.writeUInt8(0xa3, 0);
+                stopBuffer.writeUInt8(0x07, 1);
+                stopBuffer.writeUInt16LE(60, 2);
+                stopBuffer.writeUInt8(0, 4);
+                stopBuffer.writeUInt32LE(0, 5);
+                await connected.writeCharacteristicWithResponseForService(
+                  serviceUUID,
+                  rxUUID,
+                  stopBuffer.toString('base64')
+                );
+                console.log('✅ Sent A3 stop command');
+
+                clearTimeout(timeout);
+                subscription.remove();
+                resolve();
+              }
+            }
+          }
+        );
+      });
+
+      // Send A4 data request
+      const a4Buffer = Buffer.alloc(6);
+      a4Buffer.writeUInt8(0xa4, 0);
+      a4Buffer.writeUInt8(6, 1);
+      a4Buffer.writeUInt32LE(0, 2);
+      await connected.writeCharacteristicWithResponseForService(
+        serviceUUID,
+        rxUUID,
+        a4Buffer.toString('base64')
+      );
+
+      await dataPromise;
+
+      actualPackets = collectedPackets;
+      actualTotalPackets = d4Info?.totalPackets || collectedPackets.length;
+      batteryPercentage = d4Info?.batteryPercentage || 0;
+      console.log('✅ Data collected:', actualPackets.length, 'packets');
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      try {
+        await bleManager.cancelDeviceConnection(connected.id);
+      } catch (e: any) {
+        // Device may have already powered off after stop command - this is expected
+        console.log('ℹ️ Device already disconnected (powered off)');
+      }
+      bleSessionStore.clearActiveConnection();
+      console.log('✅ Device stopped and disconnected');
+    } catch (bleError: any) {
+      console.log('⚠️ BLE error:', bleError);
+      bleSessionStore.clearActiveConnection();
+      setApiLoading(false);
+      Alert.alert('Error', 'Failed to communicate with device');
+      return;
+    }
+
+    const bufferOne = Buffer.from(JSON.stringify(actualPackets));
+    const dataString = Array.from(bufferOne).join(',');
+
     const body = {
       tripName: activeTrip.tripName,
       fileName: `${fileName}.csv`,
       data: dataString,
       location: stopLat,
-      Battery: `${packetsCount?.expected?.batteryPercentage ?? 0}`,
-      totalPackets: actualTotalPackets,
+      Battery: `${batteryPercentage}`,
+      totalPackets: actualTotalPackets || actualPackets.length,
       deviceName,
       packetType: 213,
-      ...(packets?.allData?.payloadLength != null && {
-        payloadLength: packets.allData.payloadLength,
-      }),
+      ...(payloadLength != null && { payloadLength }),
     };
 
-    console.log('📡 Stopping trip...');
-    console.log('  Device Name:', deviceName);
-    console.log('  Total Packets:', actualTotalPackets);
-    console.log('  Actual Data Packets:', actualPackets.length);
-    console.log('  Packets Data:', JSON.stringify(actualPackets, null, 2)); // Pretty print
-
-    console.log('  Token:', user?.data?.token ? `${user.data.token.substring(0, 20)}...` : 'none');
-
-    setApiLoading(true);
-
-    try {
-      // First, send A3 stop command to device
-      console.log('🔵 Connecting to device to send stop command...');
-
-      // Try to use cached session for faster reconnect
-      const session = bleSessionStore.getSession();
-      let connected;
-
-      if (session && session.deviceName === deviceName) {
-        console.log('📝 Using cached session, attempting quick reconnect...');
-        try {
-          connected = await bleManager.devices([session.deviceId]).then((devices) => devices[0]);
-          if (!connected) {
-            connected = await bleManager.connectToDevice(session.deviceId);
-          }
-          await connected.discoverAllServicesAndCharacteristics();
-          console.log('✅ Quick reconnect successful');
-        } catch (e) {
-          console.log('⚠️ Cached session failed, falling back to scan');
-          connected = null;
-        }
-      }
-
-      // Fallback to scanning if no session or reconnect failed
-      if (!connected) {
-        console.log('Scanning for device...');
-        const devices = await bleManager.connectedDevices([]);
-        let targetDevice = devices.find((d) => d.name === deviceName);
-
-        if (!targetDevice) {
-          await new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-              bleManager.stopDeviceScan();
-              reject(new Error('Device not found'));
-            }, 10000);
-
-            bleManager.startDeviceScan(null, null, async (error, device) => {
-              if (error) {
-                clearTimeout(timeout);
-                bleManager.stopDeviceScan();
-                reject(error);
-                return;
-              }
-              if (device?.name === deviceName) {
-                clearTimeout(timeout);
-                bleManager.stopDeviceScan();
-                targetDevice = device;
-                resolve();
-              }
-            });
-          });
-        }
-
-        if (targetDevice) {
-          connected = await targetDevice.connect();
-          await connected.discoverAllServicesAndCharacteristics();
-        }
-      }
-
-      if (connected) {
-        const serviceUUID =
-          session?.serviceUUID || (await connected.services()).find((s) => s.uuid)?.uuid;
-        const rxUUID =
-          session?.rxUUID ||
-          (await connected.characteristicsForService(serviceUUID!)).find(
-            (c) => c.isWritableWithResponse
-          )?.uuid;
-
-        if (serviceUUID && rxUUID) {
-          // Build and send A3 stop packet
-          const stopBuffer = Buffer.alloc(9);
-          let offset = 0;
-          stopBuffer.writeUInt8(0xa3, offset++);
-          stopBuffer.writeUInt8(0x07, offset++);
-          stopBuffer.writeUInt16LE(10, offset); // 10 second interval
-          offset += 2;
-          stopBuffer.writeUInt8(0, offset++); // tripOn = false (STOP)
-          stopBuffer.writeUInt32LE(0, offset);
-          const stopCommand = stopBuffer.toString('base64');
-
-          await connected.writeCharacteristicWithResponseForService(
-            serviceUUID,
-            rxUUID,
-            stopCommand
-          );
-          console.log('✅ Sent A3 stop command to device');
-          await bleManager.cancelDeviceConnection(connected.id);
-        }
-      }
-    } catch (bleError) {
-      console.log('⚠️ BLE error (device may already be stopped):', bleError);
-      // Continue with API call even if BLE fails
-    }
+    console.log('📡 Stopping trip with', actualPackets.length, 'packets');
 
     // Now make the API call
     axios
@@ -706,14 +759,16 @@ export default function TripConfiguration() {
       })
       .then((res) => {
         console.log('✅ Trip stopped successfully:', res.data);
+        const bufferOne = Buffer.from(JSON.stringify(actualPackets));
+        const dataString = Array.from(bufferOne).join(',');
         updateTrip(deviceName, {
           status: 'Stopped',
           stopTimestamp: Date.now(),
           stopLocation: stopLat,
-          data: dataString, // Save data for trip detail view
-          packets: actualPackets, // Save actual packets for easier access
-          batteryPercentage: packetsCount?.expected?.batteryPercentage ?? 0,
-          totalPackets: actualTotalPackets,
+          data: dataString,
+          packets: actualPackets,
+          batteryPercentage: batteryPercentage,
+          totalPackets: actualTotalPackets || actualPackets.length,
         });
         setModalType('success');
         setModelLoader(true);

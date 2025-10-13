@@ -185,7 +185,7 @@ export default function History() {
       {/* Header */}
       <View className="px-5 pt-2">
         <View className="mb-3 flex-row items-center justify-between">
-          {selectionMode ? (
+          {/* {selectionMode ? (
             <>
               <Pressable
                 accessibilityRole="button"
@@ -224,7 +224,10 @@ export default function History() {
                 <MaterialCommunityIcons name="delete-outline" size={22} color="#d32f2f" />
               </Pressable>
             </>
-          )}
+          )} */}
+          <View className="h-9 w-9" />
+          <Text className="text-lg font-extrabold text-black">Device History</Text>
+          <View className="h-9 w-9" />
         </View>
       </View>
 

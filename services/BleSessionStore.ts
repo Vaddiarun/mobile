@@ -10,8 +10,16 @@ interface BleSessionData {
   timestamp: number;
 }
 
+interface ActiveConnection {
+  device: any;
+  serviceUUID: string;
+  rxUUID: string;
+  txUUID: string;
+}
+
 class BleSessionStore {
   private session: BleSessionData | null = null;
+  private activeConnection: ActiveConnection | null = null;
 
   setSession(data: BleSessionData) {
     this.session = {
@@ -37,6 +45,20 @@ class BleSessionStore {
   clearSession() {
     this.session = null;
     console.log('🗑️ BLE session cleared');
+  }
+
+  setActiveConnection(connection: ActiveConnection) {
+    this.activeConnection = connection;
+    console.log('🔗 Active connection stored');
+  }
+
+  getActiveConnection(): ActiveConnection | null {
+    return this.activeConnection;
+  }
+
+  clearActiveConnection() {
+    this.activeConnection = null;
+    console.log('🔗 Active connection cleared');
   }
 }
 

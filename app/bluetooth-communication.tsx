@@ -419,7 +419,7 @@ export default function BluetoothCommunication() {
             console.log('Treating as START mode - will reset device trip and allow fresh start');
 
             // Send stop command to reset the device
-            const stopConfig = buildA3Packet(10, false).toString('base64');
+            const stopConfig = buildA3Packet(60, false).toString('base64');
             await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, stopConfig);
             console.log('✅ Sent A3 stop command to reset orphaned trip on device');
 
@@ -469,81 +469,55 @@ export default function BluetoothCommunication() {
               Alert.alert('Error', 'Failed to navigate. Please try again.');
             }
           } else if (tripOperationRef.current === 'STOP') {
-            console.log('Device has active trip, requesting data from device...');
-            await sendDataRequest(device.id, serviceUUID, rxUUID);
+            console.log('⚠️ Device has active trip - keeping connection alive for Stop');
+            hasNavigatedRef.current = true;
+
+            // Remove monitor subscription so trip-configuration can set up its own
+            if (monitorSubscriptionRef.current) {
+              monitorSubscriptionRef.current.remove();
+              monitorSubscriptionRef.current = null;
+              console.log('🔇 Monitor subscription removed');
+            }
+
+            // Store device connection for trip-configuration to use
+            bleSessionStore.setActiveConnection({
+              device: device,
+              serviceUUID: serviceUUID,
+              rxUUID: rxUUID,
+              txUUID: txUUID,
+            });
+
+            try {
+              const { saveData } = require('../mmkv-storage/storage');
+              const tripDataKey = `trip_data_${qrCode}_${Date.now()}`;
+              saveData(tripDataKey, {
+                packets: {},
+                packetsCount: {},
+              });
+
+              setTimeout(() => {
+                router.replace({
+                  pathname: '/trip-configuration',
+                  params: {
+                    tripDataKey,
+                    tripStatus: '1',
+                    deviceName: qrCode ?? '',
+                  },
+                });
+              }, 300);
+            } catch (err) {
+              console.error('Navigation error:', err);
+              Alert.alert('Error', 'Failed to navigate. Please try again.');
+            }
           }
           break;
 
         case 0xd4:
-          if (tripOperationRef.current === 'STOP') {
-            const res = parseD4Packet(b64);
-            receivedPacketsCountRef.current = { expected: res };
-            console.log('Received D4 packet, total packets:', res.totalPackets);
-            const ack = buildA5DataAck();
-            await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, ack);
-          }
-          break;
-
         case 0xd5:
-          if (tripOperationRef.current === 'STOP') {
-            const res = parseD5DataPacket(b64);
-            const ack = buildA5DataAck();
-            await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, ack);
-            packetsArrayRef.current = [...packetsArrayRef.current, ...res.packets];
-            dataRef.current = {
-              ...dataRef.current,
-              allData: res,
-              packets: packetsArrayRef.current,
-            };
-            console.log('Received data packets, total so far:', packetsArrayRef.current.length);
-          }
-          break;
-
         case 0xd6:
-          if (tripOperationRef.current === 'STOP') {
-            const ack = buildA5DataAck();
-            const ok = await device.writeCharacteristicWithResponseForService(
-              serviceUUID,
-              rxUUID,
-              ack
-            );
-            if (ok) {
-              tripOperationRef.current = 'IDLE';
-              console.log(
-                'Navigating to trip configuration - STOP, packets:',
-                packetsArrayRef.current.length
-              );
-              console.log('Trip data collected:', JSON.stringify(dataRef.current, null, 2));
-              console.log('⚠️ NOT sending A3 stop yet - waiting for user to click Stop Trip');
-              hasNavigatedRef.current = true;
-
-              // Store data in MMKV instead of passing large JSON in params
-              try {
-                const { saveData } = require('../mmkv-storage/storage');
-                const tripDataKey = `trip_data_${qrCode}_${Date.now()}`;
-                saveData(tripDataKey, {
-                  packets: dataRef.current,
-                  packetsCount: receivedPacketsCountRef.current,
-                });
-
-                setTimeout(() => {
-                  router.replace({
-                    pathname: '/trip-configuration',
-                    params: {
-                      tripDataKey,
-                      tripStatus: '1',
-                      deviceName: qrCode ?? '',
-                    },
-                  });
-                }, 300);
-              } catch (err) {
-                console.error('Navigation error:', err);
-                Alert.alert('Error', 'Failed to navigate. Please try again.');
-              }
-
-              await bleManager.cancelDeviceConnection(device.id);
-            }
-          }
+          // These packets are only processed when data is requested from trip-configuration
+          // Not during scan to prevent data loss
+          console.log('⚠️ Ignoring data packet during scan - data will be requested on Stop');
           break;
 
         case 0xd3:
