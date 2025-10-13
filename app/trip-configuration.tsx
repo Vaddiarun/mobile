@@ -199,17 +199,36 @@ export default function TripConfiguration() {
 
   const Counter = ({ value, setValue }: { value: number; setValue: (n: number) => void }) => (
     <View className="items-center">
-      <View className="flex-row items-center gap-4">
-        <TouchableOpacity onPress={() => setValue(value - 1)}>
-          <Text className="text-[26px] font-bold text-[#1a50db]">-</Text>
+      <View className="flex-row items-center gap-3">
+        <TouchableOpacity onPress={() => setValue(Math.max(0, value - 1))}>
+          <Text className="text-[24px] font-bold text-[#1a50db]">-</Text>
         </TouchableOpacity>
 
-        <View className="h-[35px] w-[35px] items-center justify-center rounded-md border border-[#1a50db]">
-          <Text className="text-base">{value}</Text>
-        </View>
+        <TextInput
+          className="h-[40px] w-[50px] rounded-md border border-[#1a50db] text-base"
+          style={{ textAlign: 'center', textAlignVertical: 'center', paddingVertical: 0 }}
+          value={value === 0 ? '' : value.toString()}
+          placeholder=""
+          onChangeText={(text) => {
+            if (text === '') {
+              setValue(0);
+              return;
+            }
+            const num = parseInt(text);
+            if (!isNaN(num) && num >= 0) {
+              setValue(num);
+            }
+          }}
+          keyboardType="number-pad"
+          blurOnSubmit={false}
+          onSubmitEditing={(e) => e.preventDefault()}
+          autoCorrect={false}
+          autoCapitalize="none"
+          onEndEditing={(e) => e.preventDefault()}
+        />
 
         <TouchableOpacity onPress={() => setValue(value + 1)}>
-          <Text className="text-[26px] font-bold text-[#1a50db]">+</Text>
+          <Text className="text-[24px] font-bold text-[#1a50db]">+</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -801,7 +820,10 @@ export default function TripConfiguration() {
           </Pressable>
         </View>
 
-        <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingBottom: 24 }}>
+        <ScrollView
+          className="flex-1 px-5"
+          contentContainerStyle={{ paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled">
           {/* Start view */}
           {statusTrip === 0 ? (
             <View>
@@ -894,22 +916,53 @@ export default function TripConfiguration() {
                 />
               ) : (
                 <View className="mt-2 rounded-md border border-[#1a50db] p-3">
-                  <View className="flex-row items-center justify-end gap-16 pr-4">
-                    <Text className="text-[16px] font-semibold text-[#1a50db]">Min</Text>
-                    <Text className="text-[16px] font-semibold text-[#1a50db]">Max</Text>
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-[16px] text-[#444]">Custom_box_profile</Text>
+                    <View className="flex-row" style={{ width: 160, marginLeft: -10 }}>
+                      <Text
+                        className="text-[16px] font-semibold text-[#1a50db]"
+                        style={{
+                          width: 70,
+                          textAlign: 'center',
+                          marginRight: 11,
+                          marginLeft: -24,
+                        }}>
+                        Min
+                      </Text>
+                      <View style={{ width: 20 }} />
+                      <Text
+                        className="text-[16px] font-semibold text-[#1a50db]"
+                        style={{ width: 70, textAlign: 'center' }}>
+                        Max
+                      </Text>
+                    </View>
                   </View>
 
                   <View className="mt-3 flex-row items-center justify-between">
-                    <Text className="text-[16px] text-[#444]">Temperature</Text>
-                    <View className="w-2/3 flex-row items-center justify-between">
+                    <Text className="text-[16px] text-[#444]">Temperature (°C)</Text>
+                    <View
+                      className="flex-row"
+                      style={{
+                        width: 160,
+                        marginRight: 35,
+                        justifyContent: 'space-between',
+                        gap: 10,
+                      }}>
                       <Counter value={tempMin} setValue={setTempMin} />
                       <Counter value={tempMax} setValue={setTempMax} />
                     </View>
                   </View>
 
                   <View className="mt-3 flex-row items-center justify-between">
-                    <Text className="text-[16px] text-[#444]">Humidity</Text>
-                    <View className="w-2/3 flex-row items-center justify-between">
+                    <Text className="text-[16px] text-[#444]">Humidity (%Rh)</Text>
+                    <View
+                      className="flex-row"
+                      style={{
+                        width: 160,
+                        marginRight: 35,
+                        justifyContent: 'space-between',
+                        gap: 10,
+                      }}>
                       <Counter value={humMin} setValue={setHumMin} />
                       <Counter value={humMax} setValue={setHumMax} />
                     </View>
