@@ -1,16 +1,17 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Pressable, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { getTrips, clearAllTrips, deleteSelectedTrips } from '../../mmkv-storage/storage';
+import { getTripHistory } from '../../services/RestApiServices/HistoryService';
 
 type TripRow = {
   id: string;
   deviceId: string;
   timestamp: string;
+  rawTimestamp: number;
   status: 'Started' | 'Stopped';
 };
 
@@ -23,96 +24,49 @@ export default function History() {
   const [allData, setAllData] = useState<TripRow[]>([]);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
-  const loadTrips = useCallback(() => {
-    const trips = getTrips?.() || [];
-    const formatted: TripRow[] = trips.map((trip: any, index: number) => ({
-      id: String(index + 1),
-      deviceId: String(trip.deviceID ?? '—'),
-      timestamp: formatDate(
-        trip.status === 'Stopped'
-          ? (trip.stopTimestamp ?? trip.timestamp ?? trip.createdAt ?? Date.now())
-          : (trip.timestamp ?? trip.createdAt ?? Date.now())
-      ),
-      status: trip.status || 'Started',
-    }));
-    setAllData(formatted);
-  }, []);
-
-  // const loadTrips = useCallback(() => {
-  //   const trips = getTrips?.() || [];
-  //   const formatted: TripRow[] = trips.map((trip: any, index: number) => ({
-  //     id: String(index + 1),
-  //     deviceId: String(trip.deviceID ?? '—'),
-  //     timestamp: formatDate(
-  //       trip.status === 'Stopped'
-  //         ? (trip.stopTimestamp ?? trip.timestamp ?? trip.createdAt ?? Date.now())
-  //         : (trip.timestamp ?? trip.createdAt ?? Date.now())
-  //     ),
-  //     status: trip.status || 'Started',
-  //   }));
-
-  //   // 🧪 DUMMY DATA for testing — comment out later
-  //   const dummy: TripRow[] = [
-  //     {
-  //       id: '9991',
-  //       deviceId: 'TEST-1',
-  //       timestamp: formatDate(Date.now()),
-  //       status: 'Started',
-  //     },
-  //     {
-  //       id: '9992',
-  //       deviceId: 'TEST-2',
-  //       timestamp: formatDate(Date.now() - 1000 * 60 * 60),
-  //       status: 'Stopped',
-  //     },
-  //   ];
-
-  //   // merge real + dummy
-  //   setAllData([...formatted, ...dummy]);
-  // }, []);
-
-  const handleClearAllHistory = () => {
-    Alert.alert(
-      'Clear All History',
-      'Are you sure you want to delete all trip history? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear All',
-          style: 'destructive',
-          onPress: () => {
-            clearAllTrips();
-            setAllData([]);
-            setSelectedIds(new Set());
-            setSelectionMode(false);
-            Alert.alert('Success', 'All trip history has been cleared.');
-          },
-        },
-      ]
-    );
-  };
-
-  const handleDeleteSelected = () => {
-    if (selectedIds.size === 0) {
-      Alert.alert('No Selection', 'Please select trips to delete.');
-      return;
+  const loadTrips = useCallback(async () => {
+    if (loading) return;
+    
+    setLoading(true);
+    try {
+      const result = await getTripHistory('', '', 1, 10);
+      
+      if (result.success && result.data?.trips) {
+        const formatted: TripRow[] = result.data.trips
+          .sort((a: any, b: any) => (b.startTime || 0) - (a.startTime || 0))
+          .map((trip: any, index: number) => {
+            const rawTime = trip.startTime ? trip.startTime * 1000 : Date.now();
+            return {
+              id: trip.tripName || `trip-${index}-${rawTime}`,
+              deviceId: String(trip.deviceid || '—'),
+              timestamp: formatDate(rawTime),
+              rawTimestamp: rawTime,
+              status: trip.status === 'completed' ? 'Stopped' : 'Started',
+            };
+          });
+        
+        setAllData(formatted);
+        setHasMore(false);
+        setPage(1);
+      } else {
+        setAllData([]);
+      }
+    } catch (error) {
+      setAllData([]);
+    } finally {
+      setLoading(false);
     }
+  }, [loading]);
 
-    Alert.alert('Delete Selected', `Are you sure you want to delete ${selectedIds.size} trip(s)?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          deleteSelectedTrips(Array.from(selectedIds));
-          setSelectedIds(new Set());
-          setSelectionMode(false);
-          loadTrips();
-        },
-      },
-    ]);
-  };
+
+
+  const loadMoreTrips = useCallback(() => {
+    // Disabled since API returns all data at once
+  }, []);
 
   const toggleSelection = (deviceId: string) => {
     const newSelected = new Set(selectedIds);
@@ -126,8 +80,48 @@ export default function History() {
 
   useFocusEffect(
     useCallback(() => {
-      loadTrips();
-    }, [loadTrips])
+      const load = async () => {
+        if (loading) return;
+        
+        setLoading(true);
+        try {
+          const today = new Date();
+          const from = tab === 'today' 
+            ? today.toISOString().split('T')[0]
+            : new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          const to = today.toISOString().split('T')[0];
+          
+          const result = await getTripHistory(from, to, 1, 10);
+          
+          if (result.success && result.data?.trips) {
+            const formatted: TripRow[] = result.data.trips
+              .sort((a: any, b: any) => (b.startTime || 0) - (a.startTime || 0))
+              .map((trip: any, index: number) => {
+                const rawTime = trip.startTime ? trip.startTime * 1000 : Date.now();
+                return {
+                  id: trip.tripName || `trip-${index}-${Date.now()}`,
+                  deviceId: String(trip.deviceid || '—'),
+                  timestamp: formatDate(rawTime),
+                  rawTimestamp: rawTime,
+                  status: trip.status === 'completed' ? 'Stopped' : 'Started',
+                };
+              });
+            
+            setAllData(formatted);
+            setHasMore(false);
+            setPage(1);
+          } else {
+            setAllData([]);
+          }
+        } catch (error) {
+          setAllData([]);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      load();
+    }, [tab])
   );
 
   const todayPrefix = useMemo(
@@ -139,10 +133,16 @@ export default function History() {
     []
   );
 
-  const displayed = useMemo(
-    () => (tab === 'all' ? allData : allData.filter((x) => x.timestamp.startsWith(todayPrefix))),
-    [tab, allData, todayPrefix]
-  );
+  const displayed = useMemo(() => {
+    if (tab === 'today') {
+      const today = new Date().toDateString();
+      return allData.filter(trip => {
+        const tripDate = new Date(trip.rawTimestamp).toDateString();
+        return tripDate === today;
+      });
+    }
+    return allData;
+  }, [tab, allData]);
 
   const renderItem = ({ item }: { item: TripRow }) => (
     <TouchableOpacity
@@ -235,7 +235,13 @@ export default function History() {
         {/* Tabs */}
         <View className="mb-4 flex-row justify-center">
           <TouchableOpacity
-            onPress={() => setTab('all')}
+            onPress={() => {
+              if (tab !== 'all') {
+                setTab('all');
+                setPage(1);
+                setHasMore(true);
+              }
+            }}
             className={`mx-5 flex-1 items-center rounded-full border px-4 py-2 ${
               tab === 'all' ? 'border-[#1976D2] bg-[#1976D2]' : 'border-gray-300 bg-white'
             }`}>
@@ -246,7 +252,13 @@ export default function History() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => setTab('today')}
+            onPress={() => {
+              if (tab !== 'today') {
+                setTab('today');
+                setPage(1);
+                setHasMore(true);
+              }
+            }}
             className={`mx-5 flex-1 items-center rounded-full border px-4 py-2 ${
               tab === 'today' ? 'border-[#1976D2] bg-[#1976D2]' : 'border-gray-300 bg-white'
             }`}>
@@ -272,8 +284,19 @@ export default function History() {
             keyExtractor={(it) => it.id}
             renderItem={renderItem}
             contentContainerStyle={{ paddingBottom: 50, width: '95%', alignSelf: 'center' }}
+            onEndReached={loadMoreTrips}
+            onEndReachedThreshold={0.1}
             ListEmptyComponent={
-              <Text className="mt-5 text-center text-sm text-gray-600">No trips found.</Text>
+              loading ? (
+                <ActivityIndicator size="large" color="#1976D2" className="mt-10" />
+              ) : (
+                <Text className="mt-5 text-center text-sm text-gray-600">No trips found.</Text>
+              )
+            }
+            ListFooterComponent={
+              loading && allData.length > 0 ? (
+                <ActivityIndicator size="small" color="#1976D2" className="my-4" />
+              ) : null
             }
           />
         </View>

@@ -16,7 +16,8 @@ import { useRouter } from 'expo-router';
 import { Camera } from 'react-native-vision-camera';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { getUser, getTrips } from '../../mmkv-storage/storage';
+import { getUser } from '../../mmkv-storage/storage';
+import { getTripHistory } from '../../services/RestApiServices/HistoryService';
 
 export default function Home() {
   const insets = useSafeAreaInsets();
@@ -28,34 +29,44 @@ export default function Home() {
   const [tripOff, setTripOff] = useState(0);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
-  const loadUserData = useCallback(() => {
+  const loadUserData = useCallback(async () => {
     const user = getUser();
     if (user && user.data && user.data.user) {
       setUserName(user.data.user.Username || 'User');
     }
 
-    const trips = getTrips() || [];
-    const activeTrips = trips.filter((trip: any) => trip.status === 'Started');
-    const inactiveTrips = trips.filter((trip: any) => trip.status === 'Stopped');
-
-    setTripOn(activeTrips.length);
-    setTripOff(inactiveTrips.length);
-
-    const sortedTrips = [...trips]
-      .sort((a: any, b: any) => {
-        const timeA = a.stopTimestamp || a.timestamp || a.createdAt || 0;
-        const timeB = b.stopTimestamp || b.timestamp || b.createdAt || 0;
-        return timeB - timeA;
-      })
-      .slice(0, 4);
-
-    const formattedActivity = sortedTrips.map((trip: any) => ({
-      id: trip.deviceID || trip.tripName || '—',
-      time: formatDate(trip.stopTimestamp || trip.timestamp || trip.createdAt || Date.now()),
-      status: trip.status === 'Started' ? 'Turned on' : 'Turned off',
-    }));
-
-    setRecentActivity(formattedActivity);
+    try {
+      const result = await getTripHistory('', '', 1, 10);
+      if (result.success && result.data?.trips) {
+        const trips = result.data.trips;
+        const today = new Date().toDateString();
+        
+        const todayTrips = trips.filter((trip: any) => {
+          const tripDate = new Date(trip.startTime * 1000).toDateString();
+          return tripDate === today;
+        });
+        
+        const activeTrips = todayTrips.filter((trip: any) => trip.status !== 'completed');
+        const completedTrips = todayTrips.filter((trip: any) => trip.status === 'completed');
+        
+        setTripOn(activeTrips.length);
+        setTripOff(completedTrips.length);
+        
+        const recentTrips = trips
+          .sort((a: any, b: any) => (b.startTime || 0) - (a.startTime || 0))
+          .slice(0, 3);
+        
+        const formattedActivity = recentTrips.map((trip: any) => ({
+          id: trip.deviceid || '—',
+          time: formatDate(trip.startTime ? trip.startTime * 1000 : Date.now()),
+          status: trip.status === 'completed' ? 'Turned off' : 'Turned on',
+        }));
+        
+        setRecentActivity(formattedActivity);
+      }
+    } catch (error) {
+      console.log('Error loading trip data:', error);
+    }
   }, []);
 
   useFocusEffect(
@@ -194,12 +205,9 @@ export default function Home() {
         {/* Recent Activity */}
         <View className="mb-3 mt-6 flex-row justify-between">
           <Text className="text-[17px] font-bold text-black">Recent Activity</Text>
-          {/* <Text
-            className="text-sm text-blue-600"
-            accessibilityRole="button"
-            onPress={() => router.push('/(tabs)/history')}>
-            Show all
-          </Text> */}
+          <TouchableOpacity onPress={() => router.push('/(tabs)/history')}>
+            <Text className="text-sm text-blue-600">Show all</Text>
+          </TouchableOpacity>
         </View>
 
         {recentActivity.length > 0 ? (
