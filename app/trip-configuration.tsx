@@ -197,23 +197,61 @@ export default function TripConfiguration() {
     );
   };
 
-  const Counter = ({ value, setValue }: { value: number; setValue: (n: number) => void }) => (
-    <View className="items-center">
-      <View className="flex-row items-center gap-4">
-        <TouchableOpacity onPress={() => setValue(value - 1)}>
-          <Text className="text-[26px] font-bold text-[#1a50db]">-</Text>
-        </TouchableOpacity>
+  const Counter = ({
+    value,
+    setValue,
+    label,
+    showLabel = true,
+  }: {
+    value: number;
+    setValue: (n: number) => void;
+    label: string;
+    showLabel?: boolean;
+  }) => {
+    const [inputValue, setInputValue] = useState(value.toString());
 
-        <View className="h-[35px] w-[35px] items-center justify-center rounded-md border border-[#1a50db]">
-          <Text className="text-base">{value}</Text>
+    return (
+      <View className="items-center">
+        {showLabel && (
+          <Text className="mb-1 text-[14px] font-semibold text-[#1a50db]">{label}</Text>
+        )}
+        <View className="flex-row items-center gap-2">
+          <TouchableOpacity
+            onPress={() => {
+              const newVal = Math.max(-20, value - 1);
+              setValue(newVal);
+              setInputValue(newVal.toString());
+            }}>
+            <Text className="text-[20px] font-bold text-[#1a50db]">-</Text>
+          </TouchableOpacity>
+
+          <TextInput
+            className="h-[40px] w-[50px] rounded-md border border-[#1a50db] text-center text-base text-black"
+            value={inputValue}
+            onChangeText={(text) => {
+              setInputValue(text);
+            }}
+            onBlur={() => {
+              const num = parseInt(inputValue) || 0;
+              setValue(num);
+              setInputValue(num.toString());
+            }}
+            keyboardType="number-pad"
+            returnKeyType="done"
+          />
+
+          <TouchableOpacity
+            onPress={() => {
+              const newVal = Math.min(100, value + 1);
+              setValue(newVal);
+              setInputValue(newVal.toString());
+            }}>
+            <Text className="text-[20px] font-bold text-[#1a50db]">+</Text>
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity onPress={() => setValue(value + 1)}>
-          <Text className="text-[26px] font-bold text-[#1a50db]">+</Text>
-        </TouchableOpacity>
       </View>
-    </View>
-  );
+    );
+  };
 
   const getProfiles = async (token: string) => {
     if (!deviceName) {
@@ -894,24 +932,19 @@ export default function TripConfiguration() {
                 />
               ) : (
                 <View className="mt-2 rounded-md border border-[#1a50db] p-3">
-                  <View className="flex-row items-center justify-end gap-16 pr-4">
-                    <Text className="text-[16px] font-semibold text-[#1a50db]">Min</Text>
-                    <Text className="text-[16px] font-semibold text-[#1a50db]">Max</Text>
-                  </View>
-
-                  <View className="mt-3 flex-row items-center justify-between">
-                    <Text className="text-[16px] text-[#444]">Temperature</Text>
-                    <View className="w-2/3 flex-row items-center justify-between">
-                      <Counter value={tempMin} setValue={setTempMin} />
-                      <Counter value={tempMax} setValue={setTempMax} />
+                  <View className="mt-2 flex-row items-center justify-between">
+                    <Text className="text-[16px] text-[#444]">Temp (°C)</Text>
+                    <View className="flex-row items-center gap-6">
+                      <Counter value={tempMin} setValue={setTempMin} label="Min" />
+                      <Counter value={tempMax} setValue={setTempMax} label="Max" />
                     </View>
                   </View>
 
-                  <View className="mt-3 flex-row items-center justify-between">
-                    <Text className="text-[16px] text-[#444]">Humidity</Text>
-                    <View className="w-2/3 flex-row items-center justify-between">
-                      <Counter value={humMin} setValue={setHumMin} />
-                      <Counter value={humMax} setValue={setHumMax} />
+                  <View className="mt-4 flex-row items-center justify-between">
+                    <Text className="text-[16px] text-[#444]">Humid (%Rh)</Text>
+                    <View className="flex-row items-center gap-6">
+                      <Counter value={humMin} setValue={setHumMin} label="Min" showLabel={false} />
+                      <Counter value={humMax} setValue={setHumMax} label="Max" showLabel={false} />
                     </View>
                   </View>
 
