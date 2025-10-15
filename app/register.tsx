@@ -38,6 +38,16 @@ export default function Register() {
         : '';
 
   const handleSubmit = async () => {
+    if (name.includes(' ')) {
+      setModal({
+        visible: true,
+        type: 'warning',
+        title: 'Invalid Username',
+        message: 'Username cannot contain spaces',
+      });
+      return;
+    }
+
     const nameErr = validateName(name);
     const emailErr = validateEmail(email);
     const mobileErr = validateMobile(mobile);
@@ -100,11 +110,11 @@ export default function Register() {
 
       {[
         {
-          label: 'Name',
+          label: 'Username',
           value: name,
           setValue: setName,
           error: errors.name,
-          placeholder: 'Enter Name',
+          placeholder: 'Enter Username',
         },
         {
           label: 'Email',

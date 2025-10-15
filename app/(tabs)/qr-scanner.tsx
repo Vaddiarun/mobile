@@ -106,7 +106,7 @@ export default function QRScanner() {
   const onScanned = useCallback(
     async (value: string) => {
       if (isScanning) return;
-      
+
       try {
         if (!value || value.trim() === '') {
           Alert.alert('Invalid QR Code', 'Please scan a valid device QR code.');
@@ -114,16 +114,16 @@ export default function QRScanner() {
         }
 
         setIsScanning(true);
-        
+
         const s: BleState = await ble.state();
         if (s !== 'PoweredOn') {
           Alert.alert('Bluetooth Required', 'Enable Bluetooth and Location first.');
           setIsScanning(false);
           return;
         }
-        
+
         console.log('QR Code scanned:', value);
-        
+
         // Use setTimeout to ensure navigation happens after state update
         setTimeout(() => {
           router.push({
@@ -174,7 +174,7 @@ export default function QRScanner() {
           <MaterialIcons name="arrow-back" size={28} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerText}>Scan the Device</Text>
-        <MaterialIcons name="more-vert" size={24} color="#000" />
+        <View style={{ width: 28 }} />
       </View>
 
       {/* Overlay Frame */}

@@ -487,102 +487,81 @@ export default function TripConfiguration() {
 
     console.log('📡 Starting trip...');
     console.log('  Device ID:', deviceName);
-    console.log('  Token:', user?.data?.token ? `${user.data.token.substring(0, 20)}...` : 'none');
 
     setApiLoading(true);
 
     try {
-      // First, send A3 start command to device
-      console.log('🔵 Connecting to device to send start command...');
+      console.log('🔵 Using active connection to send start command...');
 
-      // Try to use cached session for faster reconnect
-      const session = bleSessionStore.getSession();
-      let connected;
-
-      if (session && session.deviceName === deviceName) {
-        console.log('📝 Using cached session, attempting quick reconnect...');
-        try {
-          connected = await bleManager.devices([session.deviceId]).then((devices) => devices[0]);
-          if (!connected) {
-            connected = await bleManager.connectToDevice(session.deviceId);
-          }
-          await connected.discoverAllServicesAndCharacteristics();
-          console.log('✅ Quick reconnect successful');
-        } catch (e) {
-          console.log('⚠️ Cached session failed, falling back to scan');
-          connected = null;
-        }
+      const activeConn = bleSessionStore.getActiveConnection();
+      if (!activeConn) {
+        throw new Error('No active connection available');
       }
 
-      // Fallback to scanning if no session or reconnect failed
-      if (!connected) {
-        console.log('Scanning for device...');
-        const devices = await bleManager.connectedDevices([]);
-        let targetDevice = devices.find((d) => d.name === deviceName);
+      const { device: connected, serviceUUID, rxUUID, txUUID } = activeConn;
 
-        if (!targetDevice) {
-          await new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-              bleManager.stopDeviceScan();
-              reject(new Error('Device not found'));
-            }, 10000);
+      // Wait for D3 acknowledgment
+      const ackPromise = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Start acknowledgment timeout'));
+        }, 5000);
 
-            bleManager.startDeviceScan(null, null, async (error, device) => {
-              if (error) {
+        const subscription = connected.monitorCharacteristicForService(
+          serviceUUID,
+          txUUID,
+          async (error, characteristic) => {
+            if (error) {
+              clearTimeout(timeout);
+              subscription.remove();
+              reject(error);
+              return;
+            }
+            if (characteristic?.value) {
+              const raw = Buffer.from(characteristic.value, 'base64');
+              const packetType = raw[0];
+
+              if (packetType === 0xd3) {
+                console.log('✅ Received D3 acknowledgment for start command');
                 clearTimeout(timeout);
-                bleManager.stopDeviceScan();
-                reject(error);
-                return;
-              }
-              if (device?.name === deviceName) {
-                clearTimeout(timeout);
-                bleManager.stopDeviceScan();
-                targetDevice = device;
+                subscription.remove();
                 resolve();
               }
-            });
-          });
-        }
+            }
+          }
+        );
+      });
 
-        if (targetDevice) {
-          connected = await targetDevice.connect();
-          await connected.discoverAllServicesAndCharacteristics();
-        }
-      }
+      // Build and send A3 start packet
+      const startBuffer = Buffer.alloc(9);
+      let offset = 0;
+      startBuffer.writeUInt8(0xa3, offset++);
+      startBuffer.writeUInt8(0x07, offset++);
+      startBuffer.writeUInt16LE(60, offset); // 60 second interval
+      offset += 2;
+      startBuffer.writeUInt8(1, offset++); // tripOn = true
+      startBuffer.writeUInt32LE(0, offset);
+      const startCommand = startBuffer.toString('base64');
 
-      if (connected) {
-        const serviceUUID =
-          session?.serviceUUID || (await connected.services()).find((s) => s.uuid)?.uuid;
-        const rxUUID =
-          session?.rxUUID ||
-          (await connected.characteristicsForService(serviceUUID!)).find(
-            (c) => c.isWritableWithResponse
-          )?.uuid;
+      await connected.writeCharacteristicWithResponseForService(
+        serviceUUID,
+        rxUUID,
+        startCommand
+      );
+      console.log('✅ Sent A3 start command to device (interval: 60s)');
 
-        if (serviceUUID && rxUUID) {
-          // Build and send A3 start packet
-          const startBuffer = Buffer.alloc(9);
-          let offset = 0;
-          startBuffer.writeUInt8(0xa3, offset++);
-          startBuffer.writeUInt8(0x07, offset++);
-          startBuffer.writeUInt16LE(60, offset); // 60 second interval
-          offset += 2;
-          startBuffer.writeUInt8(1, offset++); // tripOn = true
-          startBuffer.writeUInt32LE(0, offset);
-          const startCommand = startBuffer.toString('base64');
+      // Wait for acknowledgment
+      await ackPromise;
 
-          await connected.writeCharacteristicWithResponseForService(
-            serviceUUID,
-            rxUUID,
-            startCommand
-          );
-          console.log('✅ Sent A3 start command to device (interval: 60s)');
-          await bleManager.cancelDeviceConnection(connected.id);
-        }
-      }
+      // Disconnect after successful start
+      await bleManager.cancelDeviceConnection(connected.id);
+      bleSessionStore.clearActiveConnection();
+      console.log('✅ Device started and disconnected');
     } catch (bleError) {
-      console.log('⚠️ BLE error (device may already be started):', bleError);
-      // Continue with API call even if BLE fails
+      console.error('❌ BLE error:', bleError);
+      bleSessionStore.clearActiveConnection();
+      setApiLoading(false);
+      Alert.alert('Error', 'Failed to communicate with device');
+      return;
     }
 
     // Now make the API call

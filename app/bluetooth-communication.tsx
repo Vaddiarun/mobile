@@ -437,21 +437,31 @@ export default function BluetoothCommunication() {
 
         case 0xd2:
           if (tripOperationRef.current === 'START') {
-            // DO NOT start trip on device yet - wait for user to click "Start Trip" button
-            console.log('⚠️ NOT sending A3 start yet - device ready, navigating to config');
-
-            await bleManager.cancelDeviceConnection(device.id);
-            console.log('Disconnected from device - ready to start when user confirms');
-
+            console.log('⚠️ Device ready for START - keeping connection alive');
             hasNavigatedRef.current = true;
+
+            // Remove monitor subscription so trip-configuration can set up its own
+            if (monitorSubscriptionRef.current) {
+              monitorSubscriptionRef.current.remove();
+              monitorSubscriptionRef.current = null;
+              console.log('🔇 Monitor subscription removed');
+            }
+
+            // Store device connection for trip-configuration to use
+            bleSessionStore.setActiveConnection({
+              device: device,
+              serviceUUID: serviceUUID,
+              rxUUID: rxUUID,
+              txUUID: txUUID,
+            });
 
             // Navigate to trip configuration
             try {
               const { saveData } = require('../mmkv-storage/storage');
               const tripDataKey = `trip_data_${qrCode}_${Date.now()}`;
               saveData(tripDataKey, {
-                packets: dataRef.current,
-                packetsCount: receivedPacketsCountRef.current,
+                packets: {},
+                packetsCount: {},
               });
 
               setTimeout(() => {

@@ -57,8 +57,11 @@ export default function Settings() {
 
       <ScrollView className="flex-1 px-4" contentContainerStyle={{ paddingBottom: 24 }}>
         {/* Personal Info Section */}
-        <View className="mb-4 rounded-2xl bg-blue-50 p-4">
-          <Text className="mb-4 text-base font-bold text-blue-800">Personal Info</Text>
+        <View className="mb-4 overflow-hidden rounded-2xl border border-gray-300">
+          <View className="bg-blue-50 px-4 py-3">
+            <Text className="text-base font-bold text-blue-600">Personal Info</Text>
+          </View>
+          <View className="bg-white p-4">
 
           {/* Name */}
           <View className="mb-4 flex-row items-center">
@@ -104,13 +107,17 @@ export default function Settings() {
             </View>
           </View>
         </View>
+        </View>
 
         {/* Account Info Section */}
-        <View className="mb-4 rounded-2xl bg-gray-50 p-4">
-          <Text className="mb-4 text-base font-bold text-gray-800">Account Info</Text>
+        <View className="mb-4 overflow-hidden rounded-2xl border border-gray-300">
+          <View className="bg-blue-50 px-4 py-3">
+            <Text className="text-base font-bold text-blue-600">Account Info</Text>
+          </View>
+          <View className="bg-white p-4">
 
           {/* Help & Support */}
-          <TouchableOpacity className="mb-4 flex-row items-center justify-between py-2">
+          <TouchableOpacity onPress={() => router.push('/help-support')} className="mb-4 flex-row items-center justify-between py-2">
             <View className="flex-row items-center">
               <MaterialCommunityIcons name="help-circle-outline" size={24} color="#666" />
               <Text className="ml-3 text-base text-gray-800">Help & Support</Text>
@@ -123,6 +130,7 @@ export default function Settings() {
             <MaterialCommunityIcons name="logout" size={24} color="#d32f2f" />
             <Text className="ml-3 text-base font-semibold text-red-600">Logout</Text>
           </TouchableOpacity>
+        </View>
         </View>
       </ScrollView>
 
