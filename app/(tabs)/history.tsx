@@ -40,14 +40,17 @@ export default function History() {
         const formatted: TripRow[] = result.data.trips
           .sort((a: any, b: any) => (b.startTime || 0) - (a.startTime || 0))
           .map((trip: any, index: number) => {
-            const rawTime = trip.startTime ? trip.startTime * 1000 : Date.now();
+            const isCompleted = trip.status === 'completed';
+            const rawTime = isCompleted && trip.endTime 
+              ? trip.endTime * 1000 
+              : trip.startTime ? trip.startTime * 1000 : Date.now();
             return {
               id: trip.tripName || `trip-${index}-${rawTime}`,
               tripName: trip.tripName || '',
               deviceId: String(trip.deviceid || '—'),
               timestamp: formatDate(rawTime),
               rawTimestamp: rawTime,
-              status: trip.status === 'completed' ? 'Stopped' : 'Started',
+              status: isCompleted ? 'Stopped' : 'Started',
             };
           });
         
@@ -99,13 +102,17 @@ export default function History() {
             const formatted: TripRow[] = result.data.trips
               .sort((a: any, b: any) => (b.startTime || 0) - (a.startTime || 0))
               .map((trip: any, index: number) => {
-                const rawTime = trip.startTime ? trip.startTime * 1000 : Date.now();
+                const isCompleted = trip.status === 'completed';
+                const rawTime = isCompleted && trip.endTime 
+                  ? trip.endTime * 1000 
+                  : trip.startTime ? trip.startTime * 1000 : Date.now();
                 return {
                   id: trip.tripName || `trip-${index}-${Date.now()}`,
+                  tripName: trip.tripName || '',
                   deviceId: String(trip.deviceid || '—'),
                   timestamp: formatDate(rawTime),
                   rawTimestamp: rawTime,
-                  status: trip.status === 'completed' ? 'Stopped' : 'Started',
+                  status: isCompleted ? 'Stopped' : 'Started',
                 };
               });
             
