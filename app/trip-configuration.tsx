@@ -88,7 +88,8 @@ export default function TripConfiguration() {
   const [humMin, setHumMin] = useState(0);
   const [humMax, setHumMax] = useState(0);
   const [modelLoader, setModelLoader] = useState(false);
-  const [stopLat, setStopLong] = useState({ latitude: 0, longitude: 0 });
+  const [startLat, setStartLat] = useState({ latitude: 0, longitude: 0 });
+  const [stopLat, setStopLat] = useState({ latitude: 0, longitude: 0 });
   const [modalType, setModalType] = useState<'success' | 'error' | 'warning' | 'info'>('success');
 
   const user = getUser() || {
@@ -177,7 +178,11 @@ export default function TripConfiguration() {
 
           const coord = `${latitude}, ${longitude}`;
           setLocationsRaw(coord);
-          setStopLong({ latitude, longitude });
+          if (statusTrip === 0) {
+            setStartLat({ latitude, longitude });
+          } else {
+            setStopLat({ latitude, longitude });
+          }
 
           const geo = await Geocoder.from(latitude, longitude);
           const address = geo?.results?.[0]?.formatted_address;
@@ -433,7 +438,8 @@ export default function TripConfiguration() {
     setCustomer('');
     setBox('');
     setTripName('');
-    setStopLong({ latitude: 0, longitude: 0 });
+    setStartLat({ latitude: 0, longitude: 0 });
+    setStopLat({ latitude: 0, longitude: 0 });
     setLocation('');
     setLocationsRaw('');
     setTempMax(0);
@@ -447,7 +453,8 @@ export default function TripConfiguration() {
     setCustomer('');
     setBox('');
     setTripName('');
-    setStopLong({ latitude: 0, longitude: 0 });
+    setStartLat({ latitude: 0, longitude: 0 });
+    setStopLat({ latitude: 0, longitude: 0 });
     setLocation('');
     setLocationsRaw('');
     setStatusTrip(0);
@@ -478,7 +485,7 @@ export default function TripConfiguration() {
       phone: user?.data?.user?.Phone,
       tripName,
       deviceID: deviceName,
-      location: locationsRaw,
+      startLocation: startLat,
       tripConfig,
       timestamp: tripStartTime,
       createdAt: tripStartTime,
@@ -756,7 +763,7 @@ export default function TripConfiguration() {
       tripName: activeTrip.tripName,
       fileName: `${fileName}.csv`,
       data: dataString,
-      location: stopLat,
+      endLocation: stopLat,
       Battery: `${batteryPercentage}`,
       totalPackets: actualTotalPackets || actualPackets.length,
       deviceName,
