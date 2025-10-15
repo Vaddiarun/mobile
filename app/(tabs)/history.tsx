@@ -9,6 +9,7 @@ import { getTripHistory } from '../../services/RestApiServices/HistoryService';
 
 type TripRow = {
   id: string;
+  tripName: string;
   deviceId: string;
   timestamp: string;
   rawTimestamp: number;
@@ -42,6 +43,7 @@ export default function History() {
             const rawTime = trip.startTime ? trip.startTime * 1000 : Date.now();
             return {
               id: trip.tripName || `trip-${index}-${rawTime}`,
+              tripName: trip.tripName || '',
               deviceId: String(trip.deviceid || '—'),
               timestamp: formatDate(rawTime),
               rawTimestamp: rawTime,
@@ -150,10 +152,9 @@ export default function History() {
         if (selectionMode) {
           toggleSelection(item.deviceId);
         } else {
-          // Navigate to trip detail screen
           router.push({
             pathname: '/trip-detail',
-            params: { tripIndex: String(parseInt(item.id) - 1) },
+            params: { tripName: item.id },
           });
         }
       }}

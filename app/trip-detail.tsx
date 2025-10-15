@@ -1,11 +1,12 @@
 // app/trip-detail.tsx
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Buffer } from 'buffer';
-import { View, Text, FlatList, Pressable, ScrollView } from 'react-native';
+import { View, Text, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTrips } from '../mmkv-storage/storage';
+import { getTripDetails } from '../services/RestApiServices/HistoryService';
 
 type DataPacket = {
   time: number;
@@ -15,40 +16,39 @@ type DataPacket = {
 
 export default function TripDetail() {
   const router = useRouter();
-  const { tripIndex } = useLocalSearchParams();
+  const { tripName } = useLocalSearchParams();
+  const [loading, setLoading] = useState(true);
+  const [apiTrip, setApiTrip] = useState<any>(null);
 
-  const trip = useMemo(() => {
-    const trips = getTrips() || [];
-    const index = parseInt(String(tripIndex), 10);
-    return trips[index] || null;
-  }, [tripIndex]);
+  useEffect(() => {
+    const fetchTripDetails = async () => {
+      if (!tripName) {
+        setLoading(false);
+        return;
+      }
+
+      const result = await getTripDetails(String(tripName));
+      if (result.success && result.data) {
+        setApiTrip(result.data);
+      }
+      setLoading(false);
+    };
+
+    fetchTripDetails();
+  }, [tripName]);
+
+  const trip = apiTrip?.tripInfo;
 
   const packets = useMemo(() => {
-    if (!trip) return [];
-
-    // First try to use the packets array if available (newly saved trips)
-    if (trip.packets && Array.isArray(trip.packets)) {
-      return trip.packets.sort((a: DataPacket, b: DataPacket) => a.time - b.time);
+    if (apiTrip?.records) {
+      return apiTrip.records.map((r: any) => ({
+        time: parseInt(r.Timestamp),
+        temperature: parseFloat(r.Temperature),
+        humidity: parseFloat(r.Humidity),
+      }));
     }
-
-    // Fallback to parsing comma-separated data string (legacy trips)
-    const dataString = trip.data || '';
-    if (!dataString) return [];
-
-    try {
-      // Convert comma-separated string back to buffer, then to JSON
-      const bufferArray = dataString.split(',').map((n: string) => parseInt(n, 10));
-      const buffer = Buffer.from(bufferArray);
-      const jsonString = buffer.toString('utf-8');
-      const parsedData = JSON.parse(jsonString);
-
-      // Sort by timestamp (ascending - earliest first)
-      return (parsedData as DataPacket[]).sort((a, b) => a.time - b.time);
-    } catch (e) {
-      console.error('Error parsing trip data:', e);
-      return [];
-    }
-  }, [trip]);
+    return [];
+  }, [apiTrip]);
 
   const thresholds = useMemo(() => {
     if (!trip?.tripConfig?.boxProfile) return null;
@@ -101,11 +101,6 @@ export default function TripDetail() {
             <Text style={{ color: tempColor, fontSize: 20, fontWeight: '600' }}>
               {item.temperature}°C
             </Text>
-            {thresholds && (
-              <Text className="mt-1 text-xs text-gray-400">
-                ({thresholds.tempMin}° - {thresholds.tempMax}°)
-              </Text>
-            )}
           </View>
 
           <View className="w-px bg-gray-200" />
@@ -115,16 +110,21 @@ export default function TripDetail() {
             <Text style={{ color: humColor, fontSize: 20, fontWeight: '600' }}>
               {item.humidity}%
             </Text>
-            {thresholds && (
-              <Text className="mt-1 text-xs text-gray-400">
-                ({thresholds.humMin}% - {thresholds.humMax}%)
-              </Text>
-            )}
           </View>
         </View>
       </View>
     );
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-white">
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#1976D2" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!trip) {
     return (
@@ -176,26 +176,56 @@ export default function TripDetail() {
             </Text>
           </View>
         )}
-        <View className="mt-1 flex-row items-center">
-          <MaterialCommunityIcons name="map-marker" size={16} color="#666" />
-          <Text className="ml-1 text-sm text-gray-600">{trip.location || 'No location'}</Text>
-        </View>
+        {trip.startLocation && (
+          <View className="mt-1 flex-row items-center">
+            <MaterialCommunityIcons name="map-marker" size={16} color="#666" />
+            <Text className="ml-1 text-sm text-gray-600">
+              Start: {trip.startLocation.latitude.toFixed(4)}, {trip.startLocation.longitude.toFixed(4)}
+            </Text>
+          </View>
+        )}
+        {trip.endLocation && (
+          <View className="mt-1 flex-row items-center">
+            <MaterialCommunityIcons name="map-marker-outline" size={16} color="#666" />
+            <Text className="ml-1 text-sm text-gray-600">
+              End: {trip.endLocation.latitude.toFixed(4)}, {trip.endLocation.longitude.toFixed(4)}
+            </Text>
+          </View>
+        )}
 
-        {/* Legend */}
-        <View className="mt-3 flex-row items-center justify-around rounded-lg bg-gray-100 p-2">
-          <View className="flex-row items-center">
-            <View className="mr-1 h-3 w-3 rounded-full bg-green-500" />
-            <Text className="text-xs text-gray-600">Normal</Text>
+        {/* Thresholds & Legend */}
+        {thresholds && (
+          <View className="mt-3 rounded-lg bg-gray-100 p-3">
+            <View className="mb-2 flex-row justify-around">
+              <View className="items-center">
+                <Text className="text-xs text-gray-500">Temp Range</Text>
+                <Text className="text-sm font-semibold text-gray-700">
+                  {thresholds.tempMin}° - {thresholds.tempMax}°C
+                </Text>
+              </View>
+              <View className="items-center">
+                <Text className="text-xs text-gray-500">Humidity Range</Text>
+                <Text className="text-sm font-semibold text-gray-700">
+                  {thresholds.humMin}% - {thresholds.humMax}%
+                </Text>
+              </View>
+            </View>
+            <View className="mt-2 flex-row items-center justify-around border-t border-gray-300 pt-2">
+              <View className="flex-row items-center">
+                <View className="mr-1 h-3 w-3 rounded-full bg-green-500" />
+                <Text className="text-xs text-gray-600">Normal</Text>
+              </View>
+              <View className="flex-row items-center">
+                <View className="mr-1 h-3 w-3 rounded-full bg-yellow-500" />
+                <Text className="text-xs text-gray-600">At Limit</Text>
+              </View>
+              <View className="flex-row items-center">
+                <View className="mr-1 h-3 w-3 rounded-full bg-red-500" />
+                <Text className="text-xs text-gray-600">Exceeds</Text>
+              </View>
+            </View>
           </View>
-          <View className="flex-row items-center">
-            <View className="mr-1 h-3 w-3 rounded-full bg-yellow-500" />
-            <Text className="text-xs text-gray-600">At Limit</Text>
-          </View>
-          <View className="flex-row items-center">
-            <View className="mr-1 h-3 w-3 rounded-full bg-red-500" />
-            <Text className="text-xs text-gray-600">Exceeds</Text>
-          </View>
-        </View>
+        )}
       </View>
 
       {/* Data List */}
