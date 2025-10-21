@@ -1,5 +1,13 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Pressable, Alert, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  Pressable,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
@@ -31,19 +39,22 @@ export default function History() {
 
   const loadTrips = useCallback(async () => {
     if (loading) return;
-    
+
     setLoading(true);
     try {
       const result = await getTripHistory('', '', 1, 10);
-      
+
       if (result.success && result.data?.trips) {
         const formatted: TripRow[] = result.data.trips
           .sort((a: any, b: any) => (b.startTime || 0) - (a.startTime || 0))
           .map((trip: any, index: number) => {
             const isCompleted = trip.status === 'completed';
-            const rawTime = isCompleted && trip.endTime 
-              ? trip.endTime * 1000 
-              : trip.startTime ? trip.startTime * 1000 : Date.now();
+            const rawTime =
+              isCompleted && trip.endTime
+                ? trip.endTime * 1000
+                : trip.startTime
+                  ? trip.startTime * 1000
+                  : Date.now();
             return {
               id: trip.tripName || `trip-${index}-${rawTime}`,
               tripName: trip.tripName || '',
@@ -53,7 +64,7 @@ export default function History() {
               status: isCompleted ? 'Stopped' : 'Started',
             };
           });
-        
+
         setAllData(formatted);
         setHasMore(false);
         setPage(1);
@@ -66,8 +77,6 @@ export default function History() {
       setLoading(false);
     }
   }, [loading]);
-
-
 
   const loadMoreTrips = useCallback(() => {
     // Disabled since API returns all data at once
@@ -87,25 +96,29 @@ export default function History() {
     useCallback(() => {
       const load = async () => {
         if (loading) return;
-        
+
         setLoading(true);
         try {
           const today = new Date();
-          const from = tab === 'today' 
-            ? today.toISOString().split('T')[0]
-            : new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          const from =
+            tab === 'today'
+              ? today.toISOString().split('T')[0]
+              : new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
           const to = today.toISOString().split('T')[0];
-          
+
           const result = await getTripHistory(from, to, 1, 10);
-          
+
           if (result.success && result.data?.trips) {
             const formatted: TripRow[] = result.data.trips
               .sort((a: any, b: any) => (b.startTime || 0) - (a.startTime || 0))
               .map((trip: any, index: number) => {
                 const isCompleted = trip.status === 'completed';
-                const rawTime = isCompleted && trip.endTime 
-                  ? trip.endTime * 1000 
-                  : trip.startTime ? trip.startTime * 1000 : Date.now();
+                const rawTime =
+                  isCompleted && trip.endTime
+                    ? trip.endTime * 1000
+                    : trip.startTime
+                      ? trip.startTime * 1000
+                      : Date.now();
                 return {
                   id: trip.tripName || `trip-${index}-${Date.now()}`,
                   tripName: trip.tripName || '',
@@ -115,7 +128,18 @@ export default function History() {
                   status: isCompleted ? 'Stopped' : 'Started',
                 };
               });
-            
+
+            /* ========== TESTING: COMMENT FROM HERE TO REMOVE TEST DATA ========== */
+            // formatted.unshift({
+            //   id: 'TEST_TRIP_200',
+            //   tripName: 'TEST_TRIP_200',
+            //   deviceId: 'TEST_DEVICE',
+            //   timestamp: formatDate(Date.now()),
+            //   rawTimestamp: Date.now(),
+            //   status: 'Stopped',
+            // });
+            /* ========== TESTING: COMMENT TO HERE TO REMOVE TEST DATA ========== */
+
             setAllData(formatted);
             setHasMore(false);
             setPage(1);
@@ -128,7 +152,7 @@ export default function History() {
           setLoading(false);
         }
       };
-      
+
       load();
     }, [tab])
   );
@@ -145,7 +169,7 @@ export default function History() {
   const displayed = useMemo(() => {
     if (tab === 'today') {
       const today = new Date().toDateString();
-      return allData.filter(trip => {
+      return allData.filter((trip) => {
         const tripDate = new Date(trip.rawTimestamp).toDateString();
         return tripDate === today;
       });
@@ -175,9 +199,9 @@ export default function History() {
           />
         </View>
       )}
-      <Text className="flex-1 text-[15px] font-semibold text-black">{item.deviceId}</Text>
-      <Text className="flex-1 text-center text-[12px] text-gray-600">{item.timestamp}</Text>
-      <View className="flex-1 flex-row items-center justify-end">
+      <Text className="flex-[1.5] text-[15px] font-semibold text-black">{item.deviceId}</Text>
+      <Text className="flex-[1.8] text-left text-[12px] text-gray-600">{item.timestamp}</Text>
+      <View className="flex-[0.7] flex-row items-center justify-start">
         <View
           className={`mr-2 h-2.5 w-2.5 rounded-full ${
             item.status === 'Started' ? 'bg-green-500' : 'bg-red-500'

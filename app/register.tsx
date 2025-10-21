@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, Pressable, Image, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import { BASE_URL } from '../services/apiClient';
@@ -19,6 +19,11 @@ export default function Register() {
     title: string;
     message: string;
   }>({ visible: false, type: 'info', title: '', message: '' });
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => backHandler.remove();
+  }, []);
 
   const validateName = (val: string) =>
     !val.trim() ? 'Name is required' : val.length < 4 ? 'At least 4 characters' : '';

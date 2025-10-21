@@ -1,7 +1,7 @@
 // app/trip-detail.tsx
 import React, { useMemo, useState, useEffect } from 'react';
 import { Buffer } from 'buffer';
-import { View, Text, FlatList, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, Pressable, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -19,6 +19,8 @@ export default function TripDetail() {
   const { tripName } = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
   const [apiTrip, setApiTrip] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const RECORDS_PER_PAGE = 10;
 
   useEffect(() => {
     const fetchTripDetails = async () => {
@@ -26,6 +28,30 @@ export default function TripDetail() {
         setLoading(false);
         return;
       }
+
+      /* ========== TESTING: COMMENT FROM HERE TO REMOVE TEST DATA ========== */
+      if (tripName === 'TEST_TRIP_200') {
+        const fakeRecords = Array.from({ length: 200 }, (_, i) => ({
+          Timestamp: String(Math.floor(Date.now() / 1000) - (200 - i) * 60),
+          Temperature: String(20 + Math.random() * 10),
+          Humidity: String(50 + Math.random() * 30),
+        }));
+        setApiTrip({
+          tripInfo: {
+            tripName: 'TEST_TRIP_200',
+            deviceid: 'TEST_DEVICE',
+            deviceID: 'TEST_DEVICE',
+            tripConfig: {
+              customerProfile: { profileName: 'Test Customer' },
+              boxProfile: { profileName: 'Test Box', minTemp: 15, maxTemp: 30, minHum: 40, maxHum: 80 },
+            },
+          },
+          records: fakeRecords,
+        });
+        setLoading(false);
+        return;
+      }
+      /* ========== TESTING: COMMENT TO HERE TO REMOVE TEST DATA ========== */
 
       const result = await getTripDetails(String(tripName));
       if (result.success && result.data) {
@@ -49,6 +75,14 @@ export default function TripDetail() {
     }
     return [];
   }, [apiTrip]);
+
+  const paginatedPackets = useMemo(() => {
+    const startIndex = (currentPage - 1) * RECORDS_PER_PAGE;
+    const endIndex = startIndex + RECORDS_PER_PAGE;
+    return packets.slice(startIndex, endIndex);
+  }, [packets, currentPage]);
+
+  const totalPages = Math.ceil(packets.length / RECORDS_PER_PAGE);
 
   const thresholds = useMemo(() => {
     if (!trip?.tripConfig?.boxProfile) return null;
@@ -88,10 +122,12 @@ export default function TripDetail() {
       ? getValueColor(item.humidity, thresholds.humMin, thresholds.humMax)
       : '#10B981';
 
+    const actualRecordNumber = (currentPage - 1) * RECORDS_PER_PAGE + index + 1;
+
     return (
       <View className="mb-3 rounded-lg border border-gray-200 bg-white p-4">
         <View className="mb-2 flex-row items-center justify-between">
-          <Text className="text-sm font-semibold text-gray-600">Record #{index + 1}</Text>
+          <Text className="text-sm font-semibold text-gray-600">Record #{actualRecordNumber}</Text>
           <Text className="text-xs text-gray-500">{formatTimestamp(item.time)}</Text>
         </View>
 
@@ -158,7 +194,7 @@ export default function TripDetail() {
         </Text>
         <View className="mt-2 flex-row items-center">
           <MaterialCommunityIcons name="thermometer" size={16} color="#666" />
-          <Text className="ml-1 text-sm text-gray-600">Device: {trip.deviceID}</Text>
+          <Text className="ml-1 text-sm text-gray-600">Device: {trip.deviceid || trip.deviceID || trip.deviceName}</Text>
         </View>
         {trip.tripConfig?.customerProfile && (
           <View className="mt-1 flex-row items-center">
@@ -217,7 +253,7 @@ export default function TripDetail() {
               </View>
               <View className="flex-row items-center">
                 <View className="mr-1 h-3 w-3 rounded-full bg-yellow-500" />
-                <Text className="text-xs text-gray-600">At Limit</Text>
+                <Text className="text-xs text-gray-600" numberOfLines={1}>At Limit</Text>
               </View>
               <View className="flex-row items-center">
                 <View className="mr-1 h-3 w-3 rounded-full bg-red-500" />
@@ -239,13 +275,46 @@ export default function TripDetail() {
             <Text className="text-gray-400">Please stop trip to view records</Text>
           </View>
         ) : (
-          <FlatList
-            data={packets}
-            keyExtractor={(item, index) => `${item.time}-${index}`}
-            renderItem={renderPacket}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 20 }}
-          />
+          <>
+            <FlatList
+              data={paginatedPackets}
+              keyExtractor={(item, index) => `${item.time}-${index}`}
+              renderItem={renderPacket}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}
+            />
+            {totalPages > 1 && (
+              <View className="flex-row items-center justify-center gap-2 pb-4 pt-2">
+                <TouchableOpacity
+                  onPress={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === 1 ? 'bg-gray-300' : 'bg-blue-600'}`}>
+                  <Text className={currentPage === 1 ? 'text-gray-500' : 'text-white'}>«</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === 1 ? 'bg-gray-300' : 'bg-blue-600'}`}>
+                  <Text className={currentPage === 1 ? 'text-gray-500' : 'text-white'}>‹</Text>
+                </TouchableOpacity>
+                <View className="h-9 w-12 items-center justify-center rounded-full bg-blue-600">
+                  <Text className="text-white font-semibold">{currentPage}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === totalPages ? 'bg-gray-300' : 'bg-blue-600'}`}>
+                  <Text className={currentPage === totalPages ? 'text-gray-500' : 'text-white'}>›</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === totalPages ? 'bg-gray-300' : 'bg-blue-600'}`}>
+                  <Text className={currentPage === totalPages ? 'text-gray-500' : 'text-white'}>»</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
         )}
       </View>
     </SafeAreaView>

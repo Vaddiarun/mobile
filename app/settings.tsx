@@ -28,7 +28,7 @@ export default function Settings() {
 
   const formatDate = (timestamp: number | string): string => {
     const d = new Date(timestamp);
-    return d.toLocaleDateString('en-US', {
+    return d.toLocaleDateString('en-GB', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',

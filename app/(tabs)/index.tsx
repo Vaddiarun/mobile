@@ -36,22 +36,45 @@ export default function Home() {
     }
 
     try {
-      const result = await getHomeStatus(0, 0);
-      if (result.success && result.data) {
-        setTripOn(result.data.activeTripCount || 0);
-        setTripOff(result.data.completedTripCount || 0);
+      const today = new Date();
+      const todayStart = Math.floor(new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0).getTime() / 1000);
+      const todayEnd = Math.floor(new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999).getTime() / 1000);
+      
+      const historyResult = await getTripHistory('', '', 1, 1000);
+      if (historyResult.success && historyResult.data?.trips) {
+        const todayTrips = historyResult.data.trips.filter((trip: any) => {
+          const startTime = trip.startTime || 0;
+          const endTime = trip.endTime || 0;
+          const isStartedToday = startTime >= todayStart && startTime <= todayEnd;
+          const isStoppedToday = endTime >= todayStart && endTime <= todayEnd;
+          return isStartedToday || isStoppedToday;
+        });
+        
+        const activeTodayCount = todayTrips.filter((t: any) => t.status !== 'completed').length;
+        const completedTodayCount = todayTrips.filter((t: any) => t.status === 'completed').length;
+        
+        setTripOn(activeTodayCount);
+        setTripOff(completedTodayCount);
       }
 
-      const historyResult = await getTripHistory('', '', 1, 3);
-      if (historyResult.success && historyResult.data?.trips) {
-        const recent = historyResult.data.trips
-          .sort((a: any, b: any) => (b.startTime || 0) - (a.startTime || 0))
+      const recentResult = await getTripHistory('', '', 1, 1000);
+      if (recentResult.success && recentResult.data?.trips) {
+        const recent = recentResult.data.trips
+          .sort((a: any, b: any) => {
+            const aTime = a.status === 'completed' && a.endTime ? a.endTime : a.startTime || 0;
+            const bTime = b.status === 'completed' && b.endTime ? b.endTime : b.startTime || 0;
+            return bTime - aTime;
+          })
           .slice(0, 3)
-          .map((trip: any) => ({
-            id: trip.deviceid || '—',
-            time: formatDate(trip.startTime ? trip.startTime * 1000 : Date.now()),
-            status: trip.status === 'completed' ? 'Turned off' : 'Turned on',
-          }));
+          .map((trip: any) => {
+            const isCompleted = trip.status === 'completed';
+            const timestamp = isCompleted && trip.endTime ? trip.endTime * 1000 : trip.startTime ? trip.startTime * 1000 : Date.now();
+            return {
+              id: trip.deviceid || '—',
+              time: formatDate(timestamp),
+              status: isCompleted ? 'Turned off' : 'Turned on',
+            };
+          });
         setRecentActivity(recent);
       }
     } catch (error) {
@@ -184,8 +207,8 @@ export default function Home() {
           <View className="relative mt-10 flex-row items-center rounded-xl bg-blue-600 p-7">
             <View className="absolute left-[-20px] top-5 h-[140px] w-[140px] rounded-full bg-white/20" />
             <View className="flex-1">
-              <Text className="ml-40 text-base font-bold text-white">Humidity & Temperature</Text>
-              <Text className="ml-40 mt-1 text-[13px] text-gray-100">
+              <Text className="ml-40 text-base font-bold text-white" numberOfLines={1}>Humidity & Temperature</Text>
+              <Text className="ml-40 mt-1 text-[13px] text-gray-100" numberOfLines={1}>
                 Always Under Your Control
               </Text>
             </View>
@@ -200,26 +223,28 @@ export default function Home() {
           </TouchableOpacity>
         </View>
 
-        {recentActivity.length > 0 ? (
-          recentActivity.map((item, index) => (
-            <View
-              key={`${item.id}-${index}`}
-              className="flex-row justify-between border-b border-gray-200 py-3.5">
-              <Text className="flex-1 text-base font-semibold text-black">{item.id}</Text>
-              <Text className="flex-1 text-center text-[13px] text-gray-600">{item.time}</Text>
-              <View className="flex-1 flex-row items-center justify-end">
-                <View
-                  className={`mr-1.5 h-3 w-3 rounded-full ${item.status === 'Turned on' ? 'bg-green-500' : 'bg-red-500'}`}
-                />
-                <Text className="text-[13px] text-black">{item.status}</Text>
+        <View className="mb-4">
+          {recentActivity.length > 0 ? (
+            recentActivity.map((item, index) => (
+              <View
+                key={`${item.id}-${index}`}
+                className="flex-row justify-between border-b border-gray-200 py-3.5">
+                <Text className="flex-1 text-base font-semibold text-black">{item.id}</Text>
+                <Text className="flex-1 text-center text-[13px] text-gray-600">{item.time}</Text>
+                <View className="flex-1 flex-row items-center justify-end">
+                  <View
+                    className={`mr-1.5 h-3 w-3 rounded-full ${item.status === 'Turned on' ? 'bg-green-500' : 'bg-red-500'}`}
+                  />
+                  <Text className="text-[13px] text-black">{item.status}</Text>
+                </View>
               </View>
+            ))
+          ) : (
+            <View className="py-8">
+              <Text className="text-center text-sm text-gray-500">No recent activity</Text>
             </View>
-          ))
-        ) : (
-          <View className="py-8">
-            <Text className="text-center text-sm text-gray-500">No recent activity</Text>
-          </View>
-        )}
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
