@@ -1,5 +1,9 @@
 import React, { useEffect } from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import TickSvg from '../../assets/images/tick.svg';
+import ErrorSvg from '../../assets/images/error.svg';
+import CrossSvg from '../../assets/images/cross.svg';
+import ExclaimSvg from '../../assets/images/exclaim.svg';
 
 type Props = {
   visible: boolean;
@@ -10,19 +14,30 @@ type Props = {
 };
 
 export default function StatusModal({ visible, type, message, subMessage, onClose }: Props) {
-  const icon = {
-    success: '✅',
-    error: '⛔',
-    warning: '⚠️',
-    info: 'ℹ️',
-  }[type || 'info'];
+  const getIconComponent = () => {
+    switch (type) {
+      case 'success':
+        return <TickSvg width={80} height={80} style={{ marginBottom: 10 }} />;
+      case 'error':
+        return <ErrorSvg width={80} height={80} style={{ marginBottom: 10 }} />;
+      case 'warning':
+        return <CrossSvg width={80} height={80} style={{ marginBottom: 10 }} />;
+      case 'info':
+        return <ExclaimSvg width={80} height={80} style={{ marginBottom: 10 }} />;
+      default:
+        return <ExclaimSvg width={40} height={40} style={{ marginBottom: 10 }} />;
+    }
+  };
 
-  // ✅ Auto close for success & info
+  // ✅ Auto close for success, info & warning
   useEffect(() => {
-    if ((type === 'success' || type === 'info') && visible) {
-      const timer = setTimeout(() => {
-        onClose();
-      }, 3000);
+    if ((type === 'success' || type === 'info' || type === 'warning') && visible) {
+      const timer = setTimeout(
+        () => {
+          onClose();
+        },
+        type === 'warning' ? 4000 : 5000
+      );
       return () => clearTimeout(timer);
     }
   }, [type, visible, onClose]);
@@ -31,12 +46,12 @@ export default function StatusModal({ visible, type, message, subMessage, onClos
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
         <View style={styles.box}>
-          <Text style={styles.icon}>{icon}</Text>
+          {getIconComponent()}
           <Text style={[styles.message, { fontWeight: 'bold', fontSize: 16 }]}>{message}</Text>
           {subMessage ? <Text style={styles.message}>{subMessage}</Text> : null}
 
-          {/* Show button only for error/warning */}
-          {(type === 'error' || type === 'warning') && (
+          {/* Show button only for error */}
+          {type === 'error' && (
             <TouchableOpacity onPress={onClose} style={styles.button}>
               <Text style={styles.btnText}>OK</Text>
             </TouchableOpacity>

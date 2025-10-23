@@ -91,6 +91,8 @@ export default function TripConfiguration() {
   const [startLat, setStartLat] = useState({ latitude: 0, longitude: 0 });
   const [stopLat, setStopLat] = useState({ latitude: 0, longitude: 0 });
   const [modalType, setModalType] = useState<'success' | 'error' | 'warning' | 'info'>('success');
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalSubMessage, setModalSubMessage] = useState('');
 
   const user = getUser() || {
     data: {
@@ -316,34 +318,10 @@ export default function TripConfiguration() {
         console.error('   Token used:', authToken ? `${authToken.substring(0, 20)}...` : 'none');
       }
 
-      console.log('⚠️ Using development mode - loading default profiles');
-
-      const defaultCustomerProfile = {
-        id: 'default-customer',
-        customerProfile: {
-          profileName: 'Default Customer',
-          email: user?.data?.user?.Email || 'dev@test.com',
-          phone: user?.data?.user?.Phone || '1234567890',
-        },
-      };
-
-      const defaultBoxProfile = {
-        id: 'default-box',
-        boxProfile: {
-          profileName: 'Default Box',
-          minTemp: -20,
-          maxTemp: 60,
-          minHum: 10,
-          maxHum: 90,
-        },
-      };
-
-      setProfilesData({
-        customerProfiles: [defaultCustomerProfile],
-        boxProfiles: [defaultBoxProfile],
-      });
-      setBoxProfiles([defaultBoxProfile, { boxProfile: customizeProfile }]);
-      console.log('✅ Default profiles loaded for development mode');
+      setModalType('error');
+      setModalMessage('Profiles Not Found');
+      setModalSubMessage('Unable to load customer and box profiles. Please try again later.');
+      setModelLoader(true);
     } finally {
       setApiLoading(false);
     }
@@ -584,10 +562,11 @@ export default function TripConfiguration() {
       })
       .catch((err) => {
         console.error('❌ Start trip error:', err?.response?.data || err?.message);
-        Alert.alert(
-          'Error',
-          err?.response?.data?.message || 'Failed to start trip. Please try again.'
-        );
+        const errorMsg = err?.response?.data?.message || 'Failed to start trip. Please try again.';
+        setModalType('error');
+        setModalMessage('Cannot Start Trip');
+        setModalSubMessage(errorMsg);
+        setModelLoader(true);
       })
       .finally(() => setApiLoading(false));
   };
@@ -799,10 +778,11 @@ export default function TripConfiguration() {
       })
       .catch((err) => {
         console.error('❌ Stop trip error:', err?.response?.data || err?.message);
-        Alert.alert(
-          'Error',
-          err?.response?.data?.message || 'Failed to stop trip. Please try again.'
-        );
+        const errorMsg = err?.response?.data?.message || 'Failed to stop trip. Please try again.';
+        setModalType('error');
+        setModalMessage('Cannot Stop Trip');
+        setModalSubMessage(errorMsg);
+        setModelLoader(true);
       })
       .finally(() => setApiLoading(false));
   };
@@ -1083,21 +1063,28 @@ export default function TripConfiguration() {
           visible={modelLoader}
           type={modalType}
           message={
-            statusTrip === 0 ? `${deviceName} Sensor Started` : `${deviceName} Sensor Stopped`
+            modalMessage ||
+            (statusTrip === 0 ? `${deviceName} Sensor Started` : `${deviceName} Sensor Stopped`)
           }
           subMessage={
-            statusTrip === 0
+            modalSubMessage ||
+            (statusTrip === 0
               ? 'Your device is now recording data. All set!'
-              : 'The device has been turned off. Data capture has ended.'
+              : 'The device has been turned off. Data capture has ended.')
           }
           onClose={() => {
             setModelLoader(false);
+            const wasError = modalType === 'error';
+            setModalMessage('');
+            setModalSubMessage('');
             if (modalType === 'success') {
               if (statusTrip === 0) {
                 handleReset();
               } else {
                 handleReset2();
               }
+            } else if (wasError && modalMessage === 'Profiles Not Found') {
+              router.replace('/(tabs)');
             }
           }}
         />

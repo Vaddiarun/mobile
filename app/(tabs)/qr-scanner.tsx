@@ -89,19 +89,7 @@ export default function QRScanner() {
     })();
   }, []);
 
-  // Ensure Bluetooth is ON
-  useEffect(() => {
-    (async () => {
-      try {
-        const state: BleState = await ble.state();
-        if (state !== 'PoweredOn' && Platform.OS === 'android') {
-          await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.BLUETOOTH_SETTINGS);
-        }
-      } catch (err) {
-        console.log('Bluetooth state check failed', err);
-      }
-    })();
-  }, []);
+  // Bluetooth state will be checked in bluetooth-communication screen
 
   const onScanned = useCallback(
     async (value: string) => {
@@ -115,12 +103,7 @@ export default function QRScanner() {
 
         setIsScanning(true);
 
-        const s: BleState = await ble.state();
-        if (s !== 'PoweredOn') {
-          Alert.alert('Bluetooth Required', 'Enable Bluetooth and Location first.');
-          setIsScanning(false);
-          return;
-        }
+        // Bluetooth state will be checked in bluetooth-communication screen
 
         console.log('QR Code scanned:', value);
 

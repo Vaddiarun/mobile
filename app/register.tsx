@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, Image, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
+import GNDSvg from '../assets/images/GND.svg';
 import axios from 'axios';
 import { BASE_URL } from '../services/apiClient';
 import { EndPoints } from '../services/endPoints';
@@ -102,10 +103,10 @@ export default function Register() {
   return (
     <View className="flex-1 bg-white px-6 pt-20">
       <View className="mb-8 items-center">
-        <Image
-          source={require('../assets/images/Glogo.png')}
-          className="h-26 w-26 mb-3 mt-6"
-          resizeMode="contain"
+        <GNDSvg
+          width={104}
+          height={104}
+          style={{ marginBottom: 12, marginTop: 24 }}
         />
         <Text className="text-2xl font-bold text-gray-700">Create your account</Text>
         <Text className="mt-1 text-center text-gray-500">

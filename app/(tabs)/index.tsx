@@ -37,9 +37,22 @@ export default function Home() {
 
     try {
       const today = new Date();
-      const todayStart = Math.floor(new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0).getTime() / 1000);
-      const todayEnd = Math.floor(new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999).getTime() / 1000);
-      
+      const todayStart = Math.floor(
+        new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0).getTime() /
+          1000
+      );
+      const todayEnd = Math.floor(
+        new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate(),
+          23,
+          59,
+          59,
+          999
+        ).getTime() / 1000
+      );
+
       const historyResult = await getTripHistory('', '', 1, 1000);
       if (historyResult.success && historyResult.data?.trips) {
         const todayTrips = historyResult.data.trips.filter((trip: any) => {
@@ -49,10 +62,10 @@ export default function Home() {
           const isStoppedToday = endTime >= todayStart && endTime <= todayEnd;
           return isStartedToday || isStoppedToday;
         });
-        
+
         const activeTodayCount = todayTrips.filter((t: any) => t.status !== 'completed').length;
         const completedTodayCount = todayTrips.filter((t: any) => t.status === 'completed').length;
-        
+
         setTripOn(activeTodayCount);
         setTripOff(completedTodayCount);
       }
@@ -68,7 +81,12 @@ export default function Home() {
           .slice(0, 3)
           .map((trip: any) => {
             const isCompleted = trip.status === 'completed';
-            const timestamp = isCompleted && trip.endTime ? trip.endTime * 1000 : trip.startTime ? trip.startTime * 1000 : Date.now();
+            const timestamp =
+              isCompleted && trip.endTime
+                ? trip.endTime * 1000
+                : trip.startTime
+                  ? trip.startTime * 1000
+                  : Date.now();
             return {
               id: trip.deviceid || '—',
               time: formatDate(timestamp),
@@ -178,17 +196,17 @@ export default function Home() {
           <Text className="mb-3 text-2xl font-bold text-black">What You Did Today</Text>
           <View className="flex-row justify-between">
             <View className="flex-1 items-start">
-              <Text className="text-xl font-semibold text-neutral-900">Trip On</Text>
-              <Text className="text-md mb-1 text-gray-600">Active devices</Text>
+              <Text className="mb-2 text-xl font-semibold text-neutral-900">Trip On</Text>
+              {/* <Text className="text-md mb-1 text-gray-600">Active devices</Text> */}
               <Text className="text-6xl font-semibold text-blue-600">
                 {tripOn.toString().padStart(2, '0')}
               </Text>
             </View>
             <View className="flex-1 items-start">
-              <Text className="text-xl font-semibold text-neutral-900" numberOfLines={1}>
+              <Text className="mb-2 text-xl font-semibold text-neutral-900" numberOfLines={1}>
                 Trip Off
               </Text>
-              <Text className="text-md mb-1 text-gray-600">Inactive devices</Text>
+              {/* <Text className="text-md mb-1 text-gray-600">Inactive devices</Text> */}
               <Text className="text-6xl font-semibold text-blue-600">
                 {tripOff.toString().padStart(2, '0')}
               </Text>
@@ -207,7 +225,9 @@ export default function Home() {
           <View className="relative mt-10 flex-row items-center rounded-xl bg-blue-600 p-7">
             <View className="absolute left-[-20px] top-5 h-[140px] w-[140px] rounded-full bg-white/20" />
             <View className="flex-1">
-              <Text className="ml-40 text-base font-bold text-white" numberOfLines={1}>Humidity & Temperature</Text>
+              <Text className="ml-40 text-base font-bold text-white" numberOfLines={1}>
+                Humidity & Temperature
+              </Text>
               <Text className="ml-40 mt-1 text-[13px] text-gray-100" numberOfLines={1}>
                 Always Under Your Control
               </Text>

@@ -32,6 +32,8 @@ export default function BluetoothCommunication() {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const [loading, setLoading] = useState(false);
   const [modelLoader, setModelLoader] = useState(false);
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalSubMessage, setModalSubMessage] = useState('');
   const [scaning, setScaning] = useState(false);
   const [devices, setDevices] = useState<any[]>([]);
   const mountedRef = useRef(false);
@@ -74,7 +76,18 @@ export default function BluetoothCommunication() {
     if (mountedRef.current) return;
     mountedRef.current = true;
 
-    scanAndConnect();
+    const checkAndScan = async () => {
+      const btState = await bleManager.state();
+      if (btState !== 'PoweredOn') {
+        setModalMessage('Bluetooth is Off');
+        setModalSubMessage('Please turn on Bluetooth to scan for devices');
+        setModelLoader(true);
+        return;
+      }
+      scanAndConnect();
+    };
+
+    checkAndScan();
 
     return () => {
       bleManager.stopDeviceScan();
@@ -593,10 +606,12 @@ export default function BluetoothCommunication() {
       <StatusModal
         visible={modelLoader}
         type="warning"
-        message="Device not found and inactive"
-        subMessage=""
+        message={modalMessage || 'Device not found and inactive'}
+        subMessage={modalSubMessage}
         onClose={() => {
           setModelLoader(false);
+          setModalMessage('');
+          setModalSubMessage('');
           router.back();
         }}
       />

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput as RNTextInput, TouchableOpacity, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import OtpLockSvg from '../assets/images/otp_lock.svg';
 import axios from 'axios';
 import { BASE_URL } from '../services/apiClient';
 import { EndPoints } from '../services/endPoints';
@@ -119,6 +120,10 @@ export default function VerifyOTP() {
     <View className="flex-1 bg-white px-6 pt-20">
       <Text className="mb-1 mt-[200px] text-4xl font-bold text-gray-700">Verify your number</Text>
       <Text className="mb-8 text-gray-500">We’ve sent a code to +91 {phone}</Text>
+
+      <View className="mb-6 items-center">
+        <OtpLockSvg width={80} height={80} />
+      </View>
 
       <View className="mb-4 flex-row justify-between">
         {otp.map((d, i) => (

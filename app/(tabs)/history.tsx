@@ -258,7 +258,10 @@ export default function History() {
             </>
           )} */}
           <View className="h-9 w-9" />
-          <Text className="text-lg font-extrabold text-black">Device History</Text>
+          <View className="items-center">
+            <Text className="text-lg font-extrabold text-black">Device History</Text>
+            <Text className="text-xs text-gray-400">click on trip to view details</Text>
+          </View>
           <View className="h-9 w-9" />
         </View>
       </View>
