@@ -9,7 +9,7 @@ cd android
 cd ..
 ```
 
-### Step 2: Build Release APK
+### Step 2: Build Release APK 
 ```bash
 npx expo run:android --variant release
 ```

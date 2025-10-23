@@ -393,23 +393,7 @@ export default function TripConfiguration() {
       }
       bleSessionStore.clearActiveConnection();
     }
-
-    if (statusTrip === 0 && hasConfiguration()) {
-      Alert.alert(
-        'Discard Configuration?',
-        'You have unsaved changes. Are you sure you want to go back?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Discard',
-            style: 'destructive',
-            onPress: () => router.push('/(tabs)/qr-scanner'),
-          },
-        ]
-      );
-    } else {
-      router.push('/(tabs)/qr-scanner');
-    }
+    router.push('/(tabs)/qr-scanner');
   };
 
   const handleReset = () => {
@@ -712,10 +696,20 @@ export default function TripConfiguration() {
 
       await dataPromise;
 
-      actualPackets = collectedPackets;
+      // Filter out packets before trip start time
+      const tripStartTime = Math.floor(activeTrip.timestamp / 1000); // Convert to seconds
+      const filteredPackets = collectedPackets.filter(packet => packet.time >= tripStartTime);
+      
+      console.log('📊 Filtering packets:');
+      console.log('  Trip start time:', tripStartTime, '(', new Date(activeTrip.timestamp).toISOString(), ')');
+      console.log('  Total packets from device:', collectedPackets.length);
+      console.log('  Packets before start time:', collectedPackets.length - filteredPackets.length);
+      console.log('  Valid packets after filtering:', filteredPackets.length);
+      
+      actualPackets = filteredPackets;
       actualTotalPackets = d4Info?.totalPackets || collectedPackets.length;
       batteryPercentage = d4Info?.batteryPercentage || 0;
-      console.log('✅ Data collected:', actualPackets.length, 'packets');
+      console.log('✅ Data collected and filtered:', actualPackets.length, 'packets');
 
       await new Promise((resolve) => setTimeout(resolve, 500));
 
