@@ -36,6 +36,7 @@ import LoaderModal from '../components/LoaderModel';
 import StatusModal from '../components/StatusModel';
 import { BASE_URL } from '../services/apiClient';
 import { EndPoints } from '../services/endPoints';
+import { getTripHistory } from '../services/RestApiServices/HistoryService';
 import { Buffer } from 'buffer';
 import { BleManager } from 'react-native-ble-plx';
 import { bleSessionStore } from '../services/BleSessionStore';
@@ -93,6 +94,7 @@ export default function TripConfiguration() {
   const [modalType, setModalType] = useState<'success' | 'error' | 'warning' | 'info'>('success');
   const [modalMessage, setModalMessage] = useState('');
   const [modalSubMessage, setModalSubMessage] = useState('');
+  const [apiTripData, setApiTripData] = useState<any>(null);
 
   const user = getUser() || {
     data: {
@@ -209,11 +211,13 @@ export default function TripConfiguration() {
     setValue,
     label,
     showLabel = true,
+    isHumidity = false,
   }: {
     value: number;
     setValue: (n: number) => void;
     label: string;
     showLabel?: boolean;
+    isHumidity?: boolean;
   }) => {
     const [inputValue, setInputValue] = useState(value.toString());
 
@@ -225,7 +229,7 @@ export default function TripConfiguration() {
         <View className="flex-row items-center gap-2">
           <TouchableOpacity
             onPress={() => {
-              const newVal = Math.max(-20, value - 1);
+              const newVal = Math.max(isHumidity ? 0 : -20, value - 1);
               setValue(newVal);
               setInputValue(newVal.toString());
             }}>
@@ -236,20 +240,28 @@ export default function TripConfiguration() {
             className="h-[40px] w-[50px] rounded-md border border-[#1a50db] text-center text-base text-black"
             value={inputValue}
             onChangeText={(text) => {
-              setInputValue(text);
+              if (text === '' || text === '-' || /^-?\d+$/.test(text)) {
+                setInputValue(text);
+              }
             }}
             onBlur={() => {
-              const num = parseInt(inputValue) || 0;
-              setValue(num);
-              setInputValue(num.toString());
+              const num = parseInt(inputValue);
+              if (isNaN(num) || inputValue === '' || inputValue === '-') {
+                setValue(0);
+                setInputValue('0');
+              } else {
+                const clamped = isHumidity ? Math.max(0, Math.min(100, num)) : num;
+                setValue(clamped);
+                setInputValue(clamped.toString());
+              }
             }}
-            keyboardType="number-pad"
+            keyboardType="numeric"
             returnKeyType="done"
           />
 
           <TouchableOpacity
             onPress={() => {
-              const newVal = Math.min(100, value + 1);
+              const newVal = Math.min(isHumidity ? 100 : 100, value + 1);
               setValue(newVal);
               setInputValue(newVal.toString());
             }}>
@@ -295,12 +307,24 @@ export default function TripConfiguration() {
         hasBoxProfiles: !!res.data?.data?.boxProfiles,
       });
 
+      const customerProfiles = res?.data?.data?.customerProfiles ?? [];
       const boxList: any[] = res?.data?.data?.boxProfiles ?? [];
+      
+      // Check if profiles are empty
+      if (customerProfiles.length === 0 || boxList.length === 0) {
+        console.error('❌ Empty profiles received from API');
+        setModalType('error');
+        setModalMessage('No Profiles Available');
+        setModalSubMessage('No customer or box profiles found for this device. Cannot start trip.');
+        setModelLoader(true);
+        return;
+      }
+      
       const customized = [...boxList, { boxProfile: customizeProfile }];
       setBoxProfiles(customized);
       setProfilesData(res.data?.data);
       console.log('✅ Profiles loaded successfully:', {
-        customerProfiles: res.data?.data?.customerProfiles?.length,
+        customerProfiles: customerProfiles.length,
         boxProfiles: boxList.length,
       });
     } catch (e: any) {
@@ -351,7 +375,27 @@ export default function TripConfiguration() {
     console.log('User:', user ? 'authenticated' : 'using dev mode');
     getProfiles(user?.data?.token);
     fetchLocation();
-  }, [deviceName]);
+    
+    // Load trip data from API for stop view
+    if (statusTrip === 1) {
+      const loadTripData = async () => {
+        try {
+          const historyResult = await getTripHistory('', '', 1, 1000);
+          if (historyResult.success && historyResult.data?.trips) {
+            const activeTrip = historyResult.data.trips.find(
+              (trip: any) => trip.deviceid === deviceName && trip.status !== 'completed'
+            );
+            if (activeTrip) {
+              setApiTripData(activeTrip);
+            }
+          }
+        } catch (error) {
+          console.error('Error loading trip data for stop view:', error);
+        }
+      };
+      loadTripData();
+    }
+  }, [deviceName, statusTrip]);
 
   const validateForm = () => {
     const e: Record<string, string> = {};
@@ -361,16 +405,10 @@ export default function TripConfiguration() {
     if (!tripName) e.tripName = 'Trip name is required';
 
     if (customizeBox) {
-      if (tempMin === 0) e.temp = 'Temperature min is required';
-      else if (tempMax === 0) e.temp = 'Temperature max is required';
-      else if (tempMin < -20 || tempMin > 80) e.temp = 'Temperature min must be between -20 and 80';
-      else if (tempMax < -20 || tempMax > 80) e.temp = 'Temperature max must be between -20 and 80';
-      else if (tempMin > tempMax) e.temp = 'Temperature min cannot be greater than max';
-      if (humMin === 0) e.humidity = 'Humidity min is required';
-      else if (humMax === 0) e.humidity = 'Humidity max is required';
-      else if (humMin < 0 || humMin > 100) e.humidity = 'Humidity min must be between 0 and 100';
-      else if (humMax < 0 || humMax > 100) e.humidity = 'Humidity max must be between 0 and 100';
-      else if (humMin > humMax) e.humidity = 'Humidity min cannot be greater than max';
+      if (tempMin > tempMax) e.temp = 'Temperature min cannot be greater than max';
+      if (humMin > humMax) e.humidity = 'Humidity min cannot be greater than max';
+      else if (humMin < 0 || humMin > 100) e.humidity = 'Humidity must be between 0 and 100';
+      else if (humMax < 0 || humMax > 100) e.humidity = 'Humidity must be between 0 and 100';
     }
 
     setErrors(e);
@@ -546,7 +584,8 @@ export default function TripConfiguration() {
       })
       .catch((err) => {
         console.error('❌ Start trip error:', err?.response?.data || err?.message);
-        const errorMsg = err?.response?.data?.message || 'Failed to start trip. Please try again.';
+        const isValidationError = err?.response?.status === 400 || err?.response?.status === 403 || err?.response?.data?.message?.toLowerCase().includes('validation');
+        const errorMsg = isValidationError ? 'You cannot start/stop a trip for another user' : (err?.response?.data?.message || 'Failed to start trip. Please try again.');
         setModalType('error');
         setModalMessage('Cannot Start Trip');
         setModalSubMessage(errorMsg);
@@ -561,9 +600,19 @@ export default function TripConfiguration() {
       return;
     }
 
-    const activeTrip = allTrips.find(
-      (trip: any) => trip.deviceID === deviceName && trip.status === 'Started'
-    );
+    // Check API for active trip instead of local storage
+    let activeTrip = null;
+    try {
+      const historyResult = await getTripHistory('', '', 1, 1000);
+      if (historyResult.success && historyResult.data?.trips) {
+        activeTrip = historyResult.data.trips.find(
+          (trip: any) => trip.deviceid === deviceName && trip.status !== 'completed'
+        );
+        setApiTripData(activeTrip); // Store for display
+      }
+    } catch (error) {
+      console.error('Error checking for active trip:', error);
+    }
 
     if (!activeTrip) {
       Alert.alert('Error', 'No active trip found for this device');
@@ -650,29 +699,33 @@ export default function TripConfiguration() {
                 );
               } else if (packetType === 0xd6) {
                 console.log('📦 D6: Data transfer complete');
-                const ack = Buffer.alloc(6);
-                ack.writeUInt8(0xa5, 0);
-                ack.writeUInt8(0x06, 1);
-                ack.writeUInt32LE(0, 2);
-                await connected.writeCharacteristicWithResponseForService(
-                  serviceUUID,
-                  rxUUID,
-                  ack.toString('base64')
-                );
+                try {
+                  const ack = Buffer.alloc(6);
+                  ack.writeUInt8(0xa5, 0);
+                  ack.writeUInt8(0x06, 1);
+                  ack.writeUInt32LE(0, 2);
+                  await connected.writeCharacteristicWithResponseForService(
+                    serviceUUID,
+                    rxUUID,
+                    ack.toString('base64')
+                  );
 
-                // Send stop command immediately while still connected
-                const stopBuffer = Buffer.alloc(9);
-                stopBuffer.writeUInt8(0xa3, 0);
-                stopBuffer.writeUInt8(0x07, 1);
-                stopBuffer.writeUInt16LE(60, 2);
-                stopBuffer.writeUInt8(0, 4);
-                stopBuffer.writeUInt32LE(0, 5);
-                await connected.writeCharacteristicWithResponseForService(
-                  serviceUUID,
-                  rxUUID,
-                  stopBuffer.toString('base64')
-                );
-                console.log('✅ Sent A3 stop command');
+                  // Send stop command immediately while still connected
+                  const stopBuffer = Buffer.alloc(9);
+                  stopBuffer.writeUInt8(0xa3, 0);
+                  stopBuffer.writeUInt8(0x07, 1);
+                  stopBuffer.writeUInt16LE(60, 2);
+                  stopBuffer.writeUInt8(0, 4);
+                  stopBuffer.writeUInt32LE(0, 5);
+                  await connected.writeCharacteristicWithResponseForService(
+                    serviceUUID,
+                    rxUUID,
+                    stopBuffer.toString('base64')
+                  );
+                  console.log('✅ Sent A3 stop command');
+                } catch (writeError) {
+                  console.log('ℹ️ Device disconnected during stop command (expected)');
+                }
 
                 clearTimeout(timeout);
                 subscription.remove();
@@ -696,17 +749,11 @@ export default function TripConfiguration() {
 
       await dataPromise;
 
-      // Filter out packets before trip start time
-      const tripStartTime = Math.floor(activeTrip.timestamp / 1000); // Convert to seconds
-      const filteredPackets = collectedPackets.filter(packet => packet.time >= tripStartTime);
-      
-      console.log('📊 Filtering packets:');
-      console.log('  Trip start time:', tripStartTime, '(', new Date(activeTrip.timestamp).toISOString(), ')');
+      // Use all packets to prevent data loss
+      console.log('📊 Using all packets without filtering to prevent data loss');
       console.log('  Total packets from device:', collectedPackets.length);
-      console.log('  Packets before start time:', collectedPackets.length - filteredPackets.length);
-      console.log('  Valid packets after filtering:', filteredPackets.length);
       
-      actualPackets = filteredPackets;
+      actualPackets = collectedPackets;
       actualTotalPackets = d4Info?.totalPackets || collectedPackets.length;
       batteryPercentage = d4Info?.batteryPercentage || 0;
       console.log('✅ Data collected and filtered:', actualPackets.length, 'packets');
@@ -772,7 +819,8 @@ export default function TripConfiguration() {
       })
       .catch((err) => {
         console.error('❌ Stop trip error:', err?.response?.data || err?.message);
-        const errorMsg = err?.response?.data?.message || 'Failed to stop trip. Please try again.';
+        const isValidationError = err?.response?.status === 400 || err?.response?.status === 403 || err?.response?.data?.message?.toLowerCase().includes('validation');
+        const errorMsg = isValidationError ? 'You cannot start/stop a trip for another user' : (err?.response?.data?.message || 'Failed to stop trip. Please try again.');
         setModalType('error');
         setModalMessage('Cannot Stop Trip');
         setModalSubMessage(errorMsg);
@@ -903,8 +951,8 @@ export default function TripConfiguration() {
                   <View className="mt-4 flex-row items-center justify-between">
                     <Text className="text-[16px] text-[#444]">Humid (%Rh)</Text>
                     <View className="flex-row items-center gap-6">
-                      <Counter value={humMin} setValue={setHumMin} label="Min" showLabel={false} />
-                      <Counter value={humMax} setValue={setHumMax} label="Max" showLabel={false} />
+                      <Counter value={humMin} setValue={setHumMin} label="Min" showLabel={false} isHumidity={true} />
+                      <Counter value={humMax} setValue={setHumMax} label="Max" showLabel={false} isHumidity={true} />
                     </View>
                   </View>
 
@@ -975,17 +1023,12 @@ export default function TripConfiguration() {
               ) : null}
             </View>
           ) : (
-            // Started view
+            // Started view - Load trip data from API on mount
             <View>
               <Text className="mt-3 text-sm font-medium text-black">Customer Profile:</Text>
               <TextInput
                 className="mt-1 h-[60px] flex-1 rounded-md border border-[#7D94EF] bg-white p-3 text-black"
-                value={
-                  allTrips?.[0]?.tripConfig?.customerProfile &&
-                  typeof allTrips[0].tripConfig.customerProfile === 'object'
-                    ? allTrips[0].tripConfig.customerProfile.profileName || ''
-                    : ''
-                }
+                value={apiTripData?.tripConfig?.customerProfile?.profileName || ''}
                 editable={false}
                 selection={{ start: 0, end: 0 }}
               />
@@ -993,12 +1036,7 @@ export default function TripConfiguration() {
               <Text className="mt-3 text-sm font-medium text-black">Box Profile:</Text>
               <TextInput
                 className="mt-1 h-[60px] flex-1 rounded-md border border-[#7D94EF] bg-white p-3 text-black"
-                value={
-                  allTrips?.[0]?.tripConfig?.boxProfile &&
-                  typeof allTrips[0].tripConfig.boxProfile === 'object'
-                    ? allTrips[0].tripConfig.boxProfile.profileName || ''
-                    : ''
-                }
+                value={apiTripData?.tripConfig?.boxProfile?.profileName || ''}
                 editable={false}
                 selection={{ start: 0, end: 0 }}
               />
@@ -1029,7 +1067,7 @@ export default function TripConfiguration() {
               <Text className="mt-3 text-sm font-medium text-black">Trip Name:</Text>
               <TextInput
                 className="mt-1 h-[60px] flex-1 rounded-md border border-[#7D94EF] bg-white p-3 text-black"
-                value={allTrips?.[0]?.tripName || ''}
+                value={apiTripData?.tripName || ''}
                 editable={false}
                 selection={{ start: 0, end: 0 }}
               />
@@ -1039,13 +1077,13 @@ export default function TripConfiguration() {
           {/* Submit */}
           <View className="items-center py-5">
             <TouchableOpacity
-              disabled={location === ''}
+              disabled={location === '' || (statusTrip === 0 && (!profilesData?.customerProfiles?.length || !boxProfiles?.length))}
               onPress={statusTrip === 0 ? handleStartTrip : handleStopTrip}
               className={`h-[56px] w-1/2 items-center justify-center rounded-full ${
-                location === '' ? 'bg-gray-300' : 'bg-[#1a50db]'
+                location === '' || (statusTrip === 0 && (!profilesData?.customerProfiles?.length || !boxProfiles?.length)) ? 'bg-gray-300' : 'bg-[#1a50db]'
               }`}>
               <Text
-                className={`text-center text-base font-semibold ${location === '' ? 'text-gray-600' : 'text-white'}`}>
+                className={`text-center text-base font-semibold ${location === '' || (statusTrip === 0 && (!profilesData?.customerProfiles?.length || !boxProfiles?.length)) ? 'text-gray-600' : 'text-white'}`}>
                 {statusTrip === 0 ? 'Start' : 'Stop'}
               </Text>
             </TouchableOpacity>

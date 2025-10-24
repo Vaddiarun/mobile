@@ -125,7 +125,9 @@ This document provides a comprehensive overview of what each file contributes to
 - **`GET_CRASH_LOGS.bat`** - Script to extract crash logs from device (TO GET LOGS FROM DEVICE while standalone apk is running)
 - **`BUILD_AAB.bat`** - Windows batch script to build Android App Bundle for playstore release
 
-### Documentation & Fixes (IGNORE THESE PLEASE)
+### Documentation & Fixes 
+- IMPORTANT : **`TRIP_START_FLOW_ANALYSIS.md`** - Understand bluetooth logic
+(IGNORE BELOW PLEASE)
 - **`README_BUILD.md`** - Build process documentation
 - **`EMERGENCY_FIX.md`** - Emergency fixes and workarounds
 - **`FINAL_FIX.md`** - Final production fixes

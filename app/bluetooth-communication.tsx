@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Animated, Easing, Alert } from 'react-native';
+import { View, Animated, Easing, Alert, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { BleManager, Device } from 'react-native-ble-plx';
 import { Buffer } from 'buffer';
 import { bleSessionStore } from '../services/BleSessionStore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import LoaderModal from '../components/LoaderModel';
 import StatusModal from '../components/StatusModel';
-import { getTrips } from '../mmkv-storage/storage';
+import { getTripHistory } from '../services/RestApiServices/HistoryService';
 
 const bleManager = new BleManager();
 
@@ -409,35 +410,50 @@ export default function BluetoothCommunication() {
         case 0xd1:
           const parsed = parseD1Packet(b64);
 
-          const allTrips = getTrips() || [];
-          const existingTrip = allTrips.find(
-            (trip: any) => trip.deviceID === qrCode && trip.status === 'Started'
-          );
+          // Check API for active trips instead of local storage
+          try {
+            const historyResult = await getTripHistory('', '', 1, 1000);
+            let hasActiveTrip = false;
+            
+            if (historyResult.success && historyResult.data?.trips) {
+              const activeTrip = historyResult.data.trips.find(
+                (trip: any) => trip.deviceid === qrCode && trip.status !== 'completed'
+              );
+              hasActiveTrip = !!activeTrip;
+            }
 
-          if (existingTrip) {
-            tripOperationRef.current = 'STOP';
-            console.log('Trip operation: STOP (found active trip in local storage)');
-          } else if (parsed.tripStatus === 0) {
-            tripOperationRef.current = 'START';
-            console.log('Trip operation: START (no active trip on device)');
-          } else {
-            // Device has active trip but no matching trip in storage (orphaned trip)
-            // This happens when:
-            // 1. User started a trip but backed out without completing configuration, OR
-            // 2. User scanned to stop but backed out without clicking "Stop Trip"
-            console.log(
-              '⚠️ Orphaned trip detected - device has active trip but no configuration in storage'
-            );
-            tripOperationRef.current = 'START';
-            console.log('Treating as START mode - will reset device trip and allow fresh start');
+            if (hasActiveTrip) {
+              tripOperationRef.current = 'STOP';
+              console.log('Trip operation: STOP (found active trip in API history)');
+            } else if (parsed.tripStatus === 0) {
+              tripOperationRef.current = 'START';
+              console.log('Trip operation: START (no active trip on device)');
+            } else {
+              // Device has active trip but no matching trip in API (orphaned trip)
+              console.log(
+                '⚠️ Orphaned trip detected - device has active trip but no active trip in API'
+              );
+              tripOperationRef.current = 'START';
+              console.log('Treating as START mode - will reset device trip and allow fresh start');
 
-            // Send stop command to reset the device
-            const stopConfig = buildA3Packet(60, false).toString('base64');
-            await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, stopConfig);
-            console.log('✅ Sent A3 stop command to reset orphaned trip on device');
+              // Send stop command to reset the device
+              const stopConfig = buildA3Packet(60, false).toString('base64');
+              await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, stopConfig);
+              console.log('✅ Sent A3 stop command to reset orphaned trip on device');
 
-            // Wait a bit for device to process the stop command
-            await new Promise((resolve) => setTimeout(resolve, 500));
+              // Wait a bit for device to process the stop command
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            }
+          } catch (apiError) {
+            console.error('❌ Error checking API for active trips:', apiError);
+            // Fallback to device status if API fails
+            if (parsed.tripStatus === 0) {
+              tripOperationRef.current = 'START';
+              console.log('Trip operation: START (API failed, using device status)');
+            } else {
+              tripOperationRef.current = 'STOP';
+              console.log('Trip operation: STOP (API failed, using device status)');
+            }
           }
 
           await sendTimeResponse(
@@ -581,26 +597,47 @@ export default function BluetoothCommunication() {
     );
   }
 
+  const handleBackPress = () => {
+    bleManager.stopDeviceScan();
+    if (scanTimeoutRef.current) {
+      clearTimeout(scanTimeoutRef.current);
+      scanTimeoutRef.current = null;
+    }
+    router.replace('/(tabs)/qr-scanner');
+  };
+
   return (
-    <View className="flex-1 items-center justify-center bg-white">
-      <View className="items-center">
-        <Image
-          source={require('../assets/images/device.jpg')}
-          style={{ width: 180, height: 180 }}
-          contentFit="contain"
-        />
-        <Animated.View style={{ transform: [{ rotate: flipInterpolate }] }}>
+    <View className="flex-1 bg-white">
+      {/* Back Button */}
+      <View className="absolute top-12 left-4 z-10">
+        <TouchableOpacity
+          onPress={handleBackPress}
+          className="h-10 w-10 items-center justify-center rounded-full bg-black/20"
+        >
+          <MaterialIcons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
+      </View>
+      
+      <View className="flex-1 items-center justify-center">
+        <View className="items-center">
           <Image
-            source={require('../assets/images/transfer.png')}
-            style={{ width: 60, height: 60 }}
+            source={require('../assets/images/device.jpg')}
+            style={{ width: 180, height: 180 }}
             contentFit="contain"
           />
-        </Animated.View>
-        <Image
-          source={require('../assets/images/sensor.png')}
-          style={{ width: 180, height: 180, marginTop: 20, marginLeft: 20 }}
-          contentFit="contain"
-        />
+          <Animated.View style={{ transform: [{ rotate: flipInterpolate }] }}>
+            <Image
+              source={require('../assets/images/transfer.png')}
+              style={{ width: 60, height: 60 }}
+              contentFit="contain"
+            />
+          </Animated.View>
+          <Image
+            source={require('../assets/images/sensor.png')}
+            style={{ width: 180, height: 180, marginTop: 20, marginLeft: 20 }}
+            contentFit="contain"
+          />
+        </View>
       </View>
       <LoaderModal visible={loading} />
       <StatusModal

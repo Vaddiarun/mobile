@@ -21,14 +21,27 @@ export default function QRScanner() {
   const router = useRouter();
   const device = useCameraDevice('back');
   const [isScanning, setIsScanning] = useState(false);
+  const [cameraActive, setCameraActive] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
-      // When screen gets focus ensure scanning is false so Camera isActive
+      // Reset camera state when screen gets focus
       setIsScanning(false);
+      setCameraActive(true);
+      setRetryCount(0);
 
-      // cleanup not strictly necessary here, but kept for symmetry
+      // Failsafe: restart camera after 2 seconds if it doesn't activate
+      const failsafeTimer = setTimeout(() => {
+        if (!isScanning) {
+          console.log('Camera failsafe: restarting camera');
+          setCameraActive(false);
+          setTimeout(() => setCameraActive(true), 100);
+        }
+      }, 2000);
+
       return () => {
+        clearTimeout(failsafeTimer);
         setIsScanning(false);
       };
     }, [])
@@ -140,15 +153,42 @@ export default function QRScanner() {
     },
   });
 
+  // Camera restart function
+  const restartCamera = useCallback(() => {
+    if (retryCount < 3) {
+      console.log(`Restarting camera (attempt ${retryCount + 1})`);
+      setCameraActive(false);
+      setRetryCount(prev => prev + 1);
+      setTimeout(() => setCameraActive(true), 200);
+    }
+  }, [retryCount]);
+
   return (
     <View style={styles.container}>
-      {device && !isScanning && (
+      {device && !isScanning && cameraActive && (
         <Camera
           style={StyleSheet.absoluteFillObject}
           device={device}
           isActive={true}
           codeScanner={codeScanner}
+          onError={(error) => {
+            console.error('Camera error:', error);
+            restartCamera();
+          }}
         />
+      )}
+      
+      {/* Camera not working fallback */}
+      {(!device || !cameraActive) && (
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+          <Text style={{ color: '#fff', fontSize: 16, marginBottom: 20 }}>Camera not available</Text>
+          <TouchableOpacity 
+            onPress={restartCamera}
+            style={{ backgroundColor: '#1a50db', padding: 12, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#fff', fontSize: 14 }}>Retry Camera</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Header */}

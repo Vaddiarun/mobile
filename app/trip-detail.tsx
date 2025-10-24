@@ -1,7 +1,16 @@
 // app/trip-detail.tsx
 import React, { useMemo, useState, useEffect } from 'react';
 import { Buffer } from 'buffer';
-import { View, Text, Pressable, ActivityIndicator, TouchableOpacity, Dimensions, ScrollView, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  ActivityIndicator,
+  TouchableOpacity,
+  Dimensions,
+  ScrollView,
+  Alert,
+} from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
@@ -12,7 +21,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTrips } from '../mmkv-storage/storage';
 import { getTripDetails } from '../services/RestApiServices/HistoryService';
-import { LineChart } from 'react-native-chart-kit';
+import DynamicLineChart from '../components/DynamicLineChart';
 
 type DataPacket = {
   time: number;
@@ -48,7 +57,13 @@ export default function TripDetail() {
             deviceID: 'TEST_DEVICE',
             tripConfig: {
               customerProfile: { profileName: 'Test Customer' },
-              boxProfile: { profileName: 'Test Box', minTemp: 15, maxTemp: 30, minHum: 40, maxHum: 80 },
+              boxProfile: {
+                profileName: 'Test Box',
+                minTemp: 15,
+                maxTemp: 24,
+                minHum: 60,
+                maxHum: 90,
+              },
             },
           },
           records: fakeRecords,
@@ -117,43 +132,95 @@ export default function TripDetail() {
       let chartSvg = '';
       try {
         if (packets.length > 0) {
-          const tempData = packets.map(p => p.temperature);
-          const humData = packets.map(p => p.humidity);
+          const tempData = packets.map((p) => p.temperature);
+          const humData = packets.map((p) => p.humidity);
           const allValues = [...tempData, ...humData];
-          
+
           // Include thresholds in range calculation to ensure limit lines are visible
           if (thresholds) {
-            allValues.push(thresholds.tempMin, thresholds.tempMax, thresholds.humMin, thresholds.humMax);
+            allValues.push(
+              thresholds.tempMin,
+              thresholds.tempMax,
+              thresholds.humMin,
+              thresholds.humMax
+            );
           }
-          
+
           const dataMin = Math.min(...allValues) - 10;
           const dataMax = Math.max(...allValues) + 10;
           const range = dataMax - dataMin;
-          
+
           const svgWidth = 600;
           const svgHeight = 400;
           const padding = 60;
           const chartWidth = svgWidth - 2 * padding;
           const chartHeight = svgHeight - 2 * padding - 60;
-          
-          // Check for breaches
-          const tempBreached = thresholds && tempData.some(t => t < thresholds.tempMin || t > thresholds.tempMax);
-          const humBreached = thresholds && humData.some(h => h < thresholds.humMin || h > thresholds.humMax);
-          
-          // Generate temperature line path
-          const tempPath = tempData.map((temp, i) => {
-            const x = padding + (i / (tempData.length - 1)) * chartWidth;
-            const y = padding + ((dataMax - temp) / range) * chartHeight;
-            return i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`;
-          }).join(' ');
-          
-          // Generate humidity line path
-          const humPath = humData.map((hum, i) => {
-            const x = padding + (i / (humData.length - 1)) * chartWidth;
-            const y = padding + ((dataMax - hum) / range) * chartHeight;
-            return i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`;
-          }).join(' ');
-          
+
+          const getX = (index) => padding + (index / (packets.length - 1)) * chartWidth;
+          const getY = (value) => padding + ((dataMax - value) / range) * chartHeight;
+
+          const getColor = (value, min, max, isTemp) => {
+            if (value < min || value > max) return isTemp ? '#EF4444' : '#F97316';
+            if (value === min || value === max) return '#F59E0B';
+            return isTemp ? '#22C55E' : '#15803D';
+          };
+
+          const createSegments = (data, isTemp) => {
+            const segments = [];
+            const min = thresholds ? (isTemp ? thresholds.tempMin : thresholds.humMin) : -Infinity;
+            const max = thresholds ? (isTemp ? thresholds.tempMax : thresholds.humMax) : Infinity;
+
+            for (let i = 0; i < data.length - 1; i++) {
+              const x1 = getX(i);
+              const y1 = getY(data[i]);
+              const x2 = getX(i + 1);
+              const y2 = getY(data[i + 1]);
+              const v1 = data[i];
+              const v2 = data[i + 1];
+
+              const crossesMin = (v1 < min && v2 >= min) || (v1 >= min && v2 < min);
+              const crossesMax = (v1 <= max && v2 > max) || (v1 > max && v2 <= max);
+
+              if (!thresholds || (!crossesMin && !crossesMax)) {
+                const color = getColor(v1, min, max, isTemp);
+                segments.push(
+                  `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="2"/>`
+                );
+              } else {
+                const points = [{ x: x1, y: y1, v: v1 }];
+
+                if (crossesMin) {
+                  const t = (min - v1) / (v2 - v1);
+                  const xInt = x1 + t * (x2 - x1);
+                  const yInt = getY(min);
+                  points.push({ x: xInt, y: yInt, v: min });
+                }
+
+                if (crossesMax) {
+                  const t = (max - v1) / (v2 - v1);
+                  const xInt = x1 + t * (x2 - x1);
+                  const yInt = getY(max);
+                  points.push({ x: xInt, y: yInt, v: max });
+                }
+
+                points.push({ x: x2, y: y2, v: v2 });
+                points.sort((a, b) => a.x - b.x);
+
+                for (let j = 0; j < points.length - 1; j++) {
+                  const midValue = (points[j].v + points[j + 1].v) / 2;
+                  const color = getColor(midValue, min, max, isTemp);
+                  segments.push(
+                    `<line x1="${points[j].x}" y1="${points[j].y}" x2="${points[j + 1].x}" y2="${points[j + 1].y}" stroke="${color}" stroke-width="2"/>`
+                  );
+                }
+              }
+            }
+            return segments.join('');
+          };
+
+          const tempSegments = createSegments(tempData, true);
+          const humSegments = createSegments(humData, false);
+
           // Generate limit lines
           let limitLines = '';
           if (thresholds) {
@@ -161,7 +228,7 @@ export default function TripDetail() {
             const tempMaxY = padding + ((dataMax - thresholds.tempMax) / range) * chartHeight;
             const humMinY = padding + ((dataMax - thresholds.humMin) / range) * chartHeight;
             const humMaxY = padding + ((dataMax - thresholds.humMax) / range) * chartHeight;
-            
+
             limitLines = `
               <line x1="${padding}" y1="${tempMinY}" x2="${padding + chartWidth}" y2="${tempMinY}" stroke="#EF4444" stroke-width="1" stroke-dasharray="5,5"/>
               <line x1="${padding}" y1="${tempMaxY}" x2="${padding + chartWidth}" y2="${tempMaxY}" stroke="#EF4444" stroke-width="1" stroke-dasharray="5,5"/>
@@ -169,31 +236,34 @@ export default function TripDetail() {
               <line x1="${padding}" y1="${humMaxY}" x2="${padding + chartWidth}" y2="${humMaxY}" stroke="#F97316" stroke-width="1" stroke-dasharray="5,5"/>
             `;
           }
-          
+
           // Y-axis markings
           const yAxisMarks = [];
           for (let i = 0; i <= 4; i++) {
-            const value = dataMax - (range * i / 4);
+            const value = dataMax - (range * i) / 4;
             const y = padding + (i / 4) * chartHeight;
             yAxisMarks.push(`
               <line x1="${padding - 5}" y1="${y}" x2="${padding}" y2="${y}" stroke="#666" stroke-width="1"/>
               <text x="${padding - 10}" y="${y + 4}" font-size="10" fill="#666" text-anchor="end">${Math.round(value)}</text>
             `);
           }
-          
+
           // X-axis markings
           const xAxisMarks = [];
           const timePoints = Math.min(6, packets.length);
           for (let i = 0; i < timePoints; i++) {
             const packetIndex = Math.floor((i / (timePoints - 1)) * (packets.length - 1));
             const x = padding + (i / (timePoints - 1)) * chartWidth;
-            const time = new Date(packets[packetIndex].time * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            const time = new Date(packets[packetIndex].time * 1000).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+            });
             xAxisMarks.push(`
               <line x1="${x}" y1="${padding + chartHeight}" x2="${x}" y2="${padding + chartHeight + 5}" stroke="#666" stroke-width="1"/>
               <text x="${x}" y="${padding + chartHeight + 18}" font-size="10" fill="#666" text-anchor="middle">${time}</text>
             `);
           }
-          
+
           chartSvg = `
             <svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">
               <rect width="100%" height="100%" fill="white" stroke="#ddd" stroke-width="1" rx="8"/>
@@ -210,8 +280,8 @@ export default function TripDetail() {
               ${limitLines}
               
               <!-- Data lines -->
-              <path d="${tempPath}" stroke="${tempBreached ? '#EF4444' : '#22C55E'}" stroke-width="3" fill="none"/>
-              <path d="${humPath}" stroke="${humBreached ? '#F97316' : '#15803D'}" stroke-width="3" fill="none"/>
+              ${tempSegments}
+              ${humSegments}
               
               <!-- Y-axis labels -->
               <text x="15" y="25" font-size="12" fill="#666" font-weight="bold">°C</text>
@@ -219,9 +289,9 @@ export default function TripDetail() {
               
               <!-- Legend -->
               <rect x="${padding}" y="${svgHeight - 50}" width="${chartWidth}" height="40" fill="#f9f9f9" stroke="#ddd" rx="4"/>
-              <rect x="${padding + 10}" y="${svgHeight - 40}" width="20" height="3" fill="${tempBreached ? '#EF4444' : '#22C55E'}"/>
+              <rect x="${padding + 10}" y="${svgHeight - 40}" width="20" height="3" fill="#22C55E"/>
               <text x="${padding + 35}" y="${svgHeight - 35}" font-size="10" fill="#666">Temperature</text>
-              <rect x="${padding + 120}" y="${svgHeight - 40}" width="20" height="3" fill="${humBreached ? '#F97316' : '#15803D'}"/>
+              <rect x="${padding + 120}" y="${svgHeight - 40}" width="20" height="3" fill="#15803D"/>
               <text x="${padding + 145}" y="${svgHeight - 35}" font-size="10" fill="#666">Humidity</text>
               <rect x="${padding + 220}" y="${svgHeight - 40}" width="20" height="3" fill="#EF4444" stroke-dasharray="2,2"/>
               <text x="${padding + 245}" y="${svgHeight - 35}" font-size="10" fill="#666">Temp Limits</text>
@@ -234,14 +304,23 @@ export default function TripDetail() {
         console.log('SVG chart generation failed, continuing without chart');
       }
 
-      const recordsTable = packets.map((p, i) => {
-        const tempColor = thresholds ? 
-          (p.temperature < thresholds.tempMin || p.temperature > thresholds.tempMax) ? '#EF4444' : 
-          (p.temperature === thresholds.tempMin || p.temperature === thresholds.tempMax) ? '#F59E0B' : '#10B981' : '#10B981';
-        const humColor = thresholds ? 
-          (p.humidity < thresholds.humMin || p.humidity > thresholds.humMax) ? '#EF4444' : 
-          (p.humidity === thresholds.humMin || p.humidity === thresholds.humMax) ? '#F59E0B' : '#10B981' : '#10B981';
-        return `
+      const recordsTable = packets
+        .map((p, i) => {
+          const tempColor = thresholds
+            ? p.temperature < thresholds.tempMin || p.temperature > thresholds.tempMax
+              ? '#EF4444'
+              : p.temperature === thresholds.tempMin || p.temperature === thresholds.tempMax
+                ? '#F59E0B'
+                : '#10B981'
+            : '#10B981';
+          const humColor = thresholds
+            ? p.humidity < thresholds.humMin || p.humidity > thresholds.humMax
+              ? '#EF4444'
+              : p.humidity === thresholds.humMin || p.humidity === thresholds.humMax
+                ? '#F59E0B'
+                : '#10B981'
+            : '#10B981';
+          return `
           <tr>
             <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${i + 1}</td>
             <td style="border: 1px solid #ddd; padding: 8px;">${formatTimestamp(p.time)}</td>
@@ -249,7 +328,8 @@ export default function TripDetail() {
             <td style="border: 1px solid #ddd; padding: 8px; color: ${humColor}; font-weight: bold; text-align: center;">${p.humidity}%</td>
           </tr>
         `;
-      }).join('');
+        })
+        .join('');
 
       const html = `
         <html>
@@ -280,12 +360,16 @@ export default function TripDetail() {
               <strong style="color: #1976D2;">Total Records:</strong> ${packets.length}
             </div>
 
-            ${chartSvg ? `
+            ${
+              chartSvg
+                ? `
             <h2>📊 Trip Overview Chart</h2>
             <div style="text-align: center; margin: 20px 0;">
               ${chartSvg}
             </div>
-            ` : ''}
+            `
+                : ''
+            }
 
             <h2>📋 All Records</h2>
             <table>
@@ -311,65 +395,6 @@ export default function TripDetail() {
       Alert.alert('Error', 'Failed to generate PDF');
     }
   };
-
-  const chartData = useMemo(() => {
-    if (packets.length === 0) return null;
-
-    const tempData = packets.map(p => p.temperature);
-    const humData = packets.map(p => p.humidity);
-    
-    // X-axis labels: time on top, date below
-    const labels = packets.map((p, i) => {
-      if (i % Math.ceil(packets.length / 6) === 0) {
-        const date = new Date(p.time * 1000);
-        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-      }
-      return '';
-    });
-
-    // Calculate Y-axis range: find min/max of all data and add ±10
-    const allValues = [...tempData, ...humData];
-    const dataMin = Math.min(...allValues);
-    const dataMax = Math.max(...allValues);
-    const yAxisMin = dataMin - 10;
-    const yAxisMax = dataMax + 10;
-
-    // Create datasets with breach color handling
-    const datasets = [
-      {
-        data: tempData,
-        color: (opacity = 1) => {
-          if (!thresholds) return `rgba(34, 197, 94, ${opacity})`;
-          const breached = tempData.some(t => t < thresholds.tempMin || t > thresholds.tempMax);
-          return breached ? `rgba(239, 68, 68, ${opacity})` : `rgba(34, 197, 94, ${opacity})`;
-        },
-        strokeWidth: 4,
-      },
-      {
-        data: humData,
-        color: (opacity = 1) => {
-          if (!thresholds) return `rgba(21, 128, 61, ${opacity})`;
-          const breached = humData.some(h => h < thresholds.humMin || h > thresholds.humMax);
-          return breached ? `rgba(249, 115, 22, ${opacity})` : `rgba(21, 128, 61, ${opacity})`;
-        },
-        strokeWidth: 4,
-      },
-    ];
-
-    // Add limit lines
-    if (thresholds) {
-      datasets.push(
-        { data: new Array(tempData.length).fill(thresholds.tempMin), color: () => 'rgba(239, 68, 68, 0.5)', strokeWidth: 1 },
-        { data: new Array(tempData.length).fill(thresholds.tempMax), color: () => 'rgba(239, 68, 68, 0.5)', strokeWidth: 1 },
-        { data: new Array(humData.length).fill(thresholds.humMin), color: () => 'rgba(249, 115, 22, 0.5)', strokeWidth: 1 },
-        { data: new Array(humData.length).fill(thresholds.humMax), color: () => 'rgba(249, 115, 22, 0.5)', strokeWidth: 1 }
-      );
-    }
-
-    return { labels, datasets, yAxisMin, yAxisMax };
-  }, [packets, thresholds]);
-
-
 
   if (loading) {
     return (
@@ -413,7 +438,9 @@ export default function TripDetail() {
         </Text>
         <View className="mt-2 flex-row items-center">
           <MaterialCommunityIcons name="thermometer" size={16} color="#666" />
-          <Text className="ml-1 text-sm text-gray-600">Device: {trip.deviceid || trip.deviceID || trip.deviceName}</Text>
+          <Text className="ml-1 text-sm text-gray-600">
+            Device: {trip.deviceid || trip.deviceID || trip.deviceName}
+          </Text>
         </View>
         {trip.tripConfig?.customerProfile && (
           <View className="mt-1 flex-row items-center">
@@ -435,7 +462,8 @@ export default function TripDetail() {
           <View className="mt-1 flex-row items-center">
             <MaterialCommunityIcons name="map-marker" size={16} color="#666" />
             <Text className="ml-1 text-sm text-gray-600">
-              Start: {trip.startLocation.latitude.toFixed(4)}, {trip.startLocation.longitude.toFixed(4)}
+              Start: {trip.startLocation.latitude.toFixed(4)},{' '}
+              {trip.startLocation.longitude.toFixed(4)}
             </Text>
           </View>
         )}
@@ -464,7 +492,6 @@ export default function TripDetail() {
           </>
         )}
 
-
         {/* Thresholds & Legend */}
         {thresholds && (
           <View className="mt-3 rounded-lg bg-gray-100 p-3">
@@ -489,7 +516,9 @@ export default function TripDetail() {
               </View>
               <View className="flex-row items-center">
                 <View className="mr-1 h-3 w-3 rounded-full bg-yellow-500" />
-                <Text className="text-xs text-gray-600" numberOfLines={1}>At Limit</Text>
+                <Text className="text-xs text-gray-600" numberOfLines={1}>
+                  At Limit
+                </Text>
               </View>
               <View className="flex-row items-center">
                 <View className="mr-1 h-3 w-3 rounded-full bg-red-500" />
@@ -512,83 +541,60 @@ export default function TripDetail() {
           </View>
         ) : (
           <>
-            {chartData && (
-              <View className="mb-4">
-                {/* Y-axis labels - both on left */}
-                <View className="flex-row justify-start mb-2">
-                  <Text className="text-xs font-semibold text-gray-700 mr-4">°C</Text>
-                  <Text className="text-xs font-semibold text-gray-700">%RH</Text>
-                </View>
-                
-                <View ref={chartRef} collapsable={false}>
-                  <LineChart
-                    data={chartData}
-                    width={Dimensions.get('window').width - 32}
-                    height={220}
-                    yAxisMin={chartData.yAxisMin}
-                    yAxisMax={chartData.yAxisMax}
-                    chartConfig={{
-                      backgroundColor: '#ffffff',
-                      backgroundGradientFrom: '#ffffff',
-                      backgroundGradientTo: '#ffffff',
-                      fillShadowGradient: '#ffffff',
-                      fillShadowGradientOpacity: 0,
-                      decimalPlaces: 1,
-                      color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                      labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                      style: { borderRadius: 16 },
-                      propsForDots: { r: '0' },
-                    }}
-                    bezier
-                    style={{ marginVertical: 8, borderRadius: 16, backgroundColor: '#ffffff' }}
-                    withInnerLines={true}
-                    withOuterLines={true}
-                    withVerticalLines={false}
-                    withHorizontalLines={true}
-                    withShadow={false}
-                    segments={4}
-                  />
-                </View>
-                
+            <View className="mb-4">
+              <View className="mb-2 flex-row justify-start">
+                <Text className="mr-4 text-xs font-semibold text-gray-700">°C</Text>
+                <Text className="text-xs font-semibold text-gray-700">%RH</Text>
+              </View>
 
-                
-                {/* Color rectangles legend - vertically aligned */}
-                <View className="mt-3 items-center">
-                  <View className="flex-row justify-between w-full px-8 mb-2">
-                    <View className="flex-row items-center flex-1">
-                      <View className="mr-2 h-3 w-8 bg-green-500" />
-                      <Text className="text-xs text-gray-600">Temperature</Text>
-                    </View>
-                    <View className="flex-row items-center flex-1">
-                      <View className="mr-2 h-3 w-8 bg-red-500" />
-                      <Text className="text-xs text-gray-600">Temp Limits</Text>
-                    </View>
+              <View ref={chartRef} collapsable={false} className="rounded-2xl bg-white p-2">
+                <DynamicLineChart
+                  packets={packets}
+                  thresholds={thresholds}
+                  width={Dimensions.get('window').width - 32}
+                  height={220}
+                />
+              </View>
+
+              <View className="mt-3 items-center">
+                <View className="mb-2 w-full flex-row justify-between px-8">
+                  <View className="flex-1 flex-row items-center">
+                    <View className="mr-2 h-3 w-8 bg-green-500" />
+                    <Text className="text-xs text-gray-600">Temperature</Text>
                   </View>
-                  <View className="flex-row justify-between w-full px-8">
-                    <View className="flex-row items-center flex-1">
-                      <View className="mr-2 h-3 w-8 bg-green-700" />
-                      <Text className="text-xs text-gray-600">Humidity</Text>
-                    </View>
-                    <View className="flex-row items-center flex-1">
-                      <View className="mr-2 h-3 w-8 bg-orange-500" />
-                      <Text className="text-xs text-gray-600">Humid Limits</Text>
-                    </View>
+                  <View className="flex-1 flex-row items-center">
+                    <View className="mr-2 h-3 w-8 bg-red-500" />
+                    <Text className="text-xs text-gray-600">Temp Limits</Text>
+                  </View>
+                </View>
+                <View className="w-full flex-row justify-between px-8">
+                  <View className="flex-1 flex-row items-center">
+                    <View className="mr-2 h-3 w-8 bg-green-700" />
+                    <Text className="text-xs text-gray-600">Humidity</Text>
+                  </View>
+                  <View className="flex-1 flex-row items-center">
+                    <View className="mr-2 h-3 w-8 bg-orange-500" />
+                    <Text className="text-xs text-gray-600">Humid Limits</Text>
                   </View>
                 </View>
               </View>
-            )}
+            </View>
             {/* Buttons */}
-            <View className="flex-row justify-center items-center mb-4 gap-4">
+            <View className="mb-4 flex-row items-center justify-center gap-4">
               <TouchableOpacity
                 onPress={() => router.push({ pathname: '/trip-records', params: { tripName } })}
-                className="rounded-lg bg-blue-600 py-3 px-8">
-                <Text className="text-base font-semibold text-white" numberOfLines={1}>View Records</Text>
+                className="rounded-lg bg-blue-600 px-8 py-3">
+                <Text className="text-base font-semibold text-white" numberOfLines={1}>
+                  View Records
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={generatePDF}
-                className="rounded-lg bg-green-600 py-3 px-4 flex-row items-center">
+                className="flex-row items-center rounded-lg bg-green-600 px-4 py-3">
                 <MaterialCommunityIcons name="download" size={20} color="white" />
-                <Text className="text-base font-semibold text-white ml-2" numberOfLines={1}>PDF</Text>
+                <Text className="ml-2 text-base font-semibold text-white" numberOfLines={1}>
+                  PDF
+                </Text>
               </TouchableOpacity>
             </View>
           </>
