@@ -10,6 +10,7 @@ import {
   Dimensions,
   ScrollView,
   Alert,
+  Linking,
 } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -458,23 +459,7 @@ export default function TripDetail() {
             </Text>
           </View>
         )}
-        {trip.startLocation && (
-          <View className="mt-1 flex-row items-center">
-            <MaterialCommunityIcons name="map-marker" size={16} color="#666" />
-            <Text className="ml-1 text-sm text-gray-600">
-              Start: {trip.startLocation.latitude.toFixed(4)},{' '}
-              {trip.startLocation.longitude.toFixed(4)}
-            </Text>
-          </View>
-        )}
-        {trip.endLocation && (
-          <View className="mt-1 flex-row items-center">
-            <MaterialCommunityIcons name="map-marker-outline" size={16} color="#666" />
-            <Text className="ml-1 text-sm text-gray-600">
-              End: {trip.endLocation.latitude.toFixed(4)}, {trip.endLocation.longitude.toFixed(4)}
-            </Text>
-          </View>
-        )}
+
         {packets.length > 0 && (
           <>
             <View className="mt-1 flex-row items-center">
@@ -580,19 +565,32 @@ export default function TripDetail() {
               </View>
             </View>
             {/* Buttons */}
-            <View className="mb-4 flex-row items-center justify-center gap-4">
+            <View className="mb-4 flex-row items-center justify-center gap-3">
               <TouchableOpacity
                 onPress={() => router.push({ pathname: '/trip-records', params: { tripName } })}
-                className="rounded-lg bg-blue-600 px-8 py-3">
-                <Text className="text-base font-semibold text-white" numberOfLines={1}>
+                className="rounded-lg border-2 border-blue-600 px-6 py-3">
+                <Text className="text-base font-semibold text-blue-600" numberOfLines={1}>
                   View Records
                 </Text>
               </TouchableOpacity>
+              {trip.startLocation && trip.endLocation && (
+                <TouchableOpacity
+                  onPress={() => {
+                    const url = `https://www.google.com/maps/dir/?api=1&origin=${trip.startLocation.latitude},${trip.startLocation.longitude}&destination=${trip.endLocation.latitude},${trip.endLocation.longitude}`;
+                    Linking.openURL(url).catch(() => Alert.alert('Error', 'Unable to open Google Maps'));
+                  }}
+                  className="flex-row items-center rounded-lg border-2 border-blue-600 px-4 py-3">
+                  <MaterialCommunityIcons name="map-marker-path" size={20} color="#1976D2" />
+                  <Text className="ml-2 text-base font-semibold text-blue-600" numberOfLines={1}>
+                    View Path
+                  </Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 onPress={generatePDF}
-                className="flex-row items-center rounded-lg bg-green-600 px-4 py-3">
-                <MaterialCommunityIcons name="download" size={20} color="white" />
-                <Text className="ml-2 text-base font-semibold text-white" numberOfLines={1}>
+                className="flex-row items-center rounded-lg border-2 border-blue-600 px-4 py-3">
+                <MaterialCommunityIcons name="download" size={20} color="#1976D2" />
+                <Text className="ml-2 text-base font-semibold text-blue-600" numberOfLines={1}>
                   PDF
                 </Text>
               </TouchableOpacity>
