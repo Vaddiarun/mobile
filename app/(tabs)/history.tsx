@@ -34,53 +34,73 @@ export default function History() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [showAllPages, setShowAllPages] = useState(false);
+  const RECORDS_PER_PAGE = 10;
 
-  const loadTrips = useCallback(async () => {
+  const loadAllTrips = async (from: string, to: string) => {
     if (loading) return;
 
     setLoading(true);
     try {
-      const result = await getTripHistory('', '', 1, 10);
+      let allTrips: any[] = [];
+      let page = 1;
+      let totalPages = 1;
 
-      if (result.success && result.data?.trips) {
-        const formatted: TripRow[] = result.data.trips
-          .sort((a: any, b: any) => (b.startTime || 0) - (a.startTime || 0))
-          .map((trip: any, index: number) => {
-            const isCompleted = trip.status === 'completed';
-            const rawTime =
-              isCompleted && trip.endTime
-                ? trip.endTime * 1000
-                : trip.startTime
-                  ? trip.startTime * 1000
-                  : Date.now();
-            return {
-              id: trip.tripName || `trip-${index}-${rawTime}`,
-              tripName: trip.tripName || '',
-              deviceId: String(trip.deviceid || '—'),
-              timestamp: formatDate(rawTime),
-              rawTimestamp: rawTime,
-              status: isCompleted ? 'Stopped' : 'Started',
-            };
-          });
+      do {
+        const result = await getTripHistory(from, to, page, 50);
+        
+        if (result.success && result.data) {
+          if (result.data.trips) {
+            allTrips = [...allTrips, ...result.data.trips];
+          }
+          totalPages = result.data.meta?.totalPages || 1;
+          page++;
+        } else {
+          break;
+        }
+      } while (page <= totalPages);
 
-        setAllData(formatted);
-        setHasMore(false);
-        setPage(1);
-      } else {
-        setAllData([]);
-      }
+      const formatted: TripRow[] = allTrips
+        .sort((a: any, b: any) => (b.startTime || 0) - (a.startTime || 0))
+        .map((trip: any, index: number) => {
+          const isCompleted = trip.status === 'completed';
+          const rawTime =
+            isCompleted && trip.endTime
+              ? trip.endTime * 1000
+              : trip.startTime
+                ? trip.startTime * 1000
+                : Date.now();
+          return {
+            id: trip.tripName || `trip-${index}-${rawTime}`,
+            tripName: trip.tripName || '',
+            deviceId: String(trip.deviceid || '—'),
+            timestamp: formatDate(rawTime),
+            rawTimestamp: rawTime,
+            status: isCompleted ? 'Stopped' : 'Started',
+          };
+        });
+
+      setAllData(formatted);
     } catch (error) {
       setAllData([]);
     } finally {
       setLoading(false);
     }
-  }, [loading]);
+  };
 
-  const loadMoreTrips = useCallback(() => {
-    // Disabled since API returns all data at once
-  }, []);
+
+
+  const formatDate = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
 
   const toggleSelection = (deviceId: string) => {
     const newSelected = new Set(selectedIds);
@@ -94,66 +114,14 @@ export default function History() {
 
   useFocusEffect(
     useCallback(() => {
-      const load = async () => {
-        if (loading) return;
+      const today = new Date();
+      const from =
+        tab === 'today'
+          ? today.toISOString().split('T')[0]
+          : new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const to = today.toISOString().split('T')[0];
 
-        setLoading(true);
-        try {
-          const today = new Date();
-          const from =
-            tab === 'today'
-              ? today.toISOString().split('T')[0]
-              : new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          const to = today.toISOString().split('T')[0];
-
-          const result = await getTripHistory(from, to, 1, 10);
-
-          if (result.success && result.data?.trips) {
-            const formatted: TripRow[] = result.data.trips
-              .sort((a: any, b: any) => (b.startTime || 0) - (a.startTime || 0))
-              .map((trip: any, index: number) => {
-                const isCompleted = trip.status === 'completed';
-                const rawTime =
-                  isCompleted && trip.endTime
-                    ? trip.endTime * 1000
-                    : trip.startTime
-                      ? trip.startTime * 1000
-                      : Date.now();
-                return {
-                  id: trip.tripName || `trip-${index}-${Date.now()}`,
-                  tripName: trip.tripName || '',
-                  deviceId: String(trip.deviceid || '—'),
-                  timestamp: formatDate(rawTime),
-                  rawTimestamp: rawTime,
-                  status: isCompleted ? 'Stopped' : 'Started',
-                };
-              });
-
-            /* ========== TESTING: COMMENT FROM HERE TO REMOVE TEST DATA ========== */
-            // formatted.unshift({
-            //   id: 'TEST_TRIP_200',
-            //   tripName: 'TEST_TRIP_200',
-            //   deviceId: 'TEST_DEVICE',
-            //   timestamp: formatDate(Date.now()),
-            //   rawTimestamp: Date.now(),
-            //   status: 'Stopped',
-            // });
-            /* ========== TESTING: COMMENT TO HERE TO REMOVE TEST DATA ========== */
-
-            setAllData(formatted);
-            setHasMore(false);
-            setPage(1);
-          } else {
-            setAllData([]);
-          }
-        } catch (error) {
-          setAllData([]);
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      load();
+      loadAllTrips(from, to);
     }, [tab])
   );
 
@@ -166,7 +134,7 @@ export default function History() {
     []
   );
 
-  const displayed = useMemo(() => {
+  const filteredData = useMemo(() => {
     if (tab === 'today') {
       const today = new Date().toDateString();
       return allData.filter((trip) => {
@@ -176,6 +144,14 @@ export default function History() {
     }
     return allData;
   }, [tab, allData]);
+
+  const paginatedData = useMemo(() => {
+    const startIndex = (currentPage - 1) * RECORDS_PER_PAGE;
+    const endIndex = startIndex + RECORDS_PER_PAGE;
+    return filteredData.slice(startIndex, endIndex);
+  }, [filteredData, currentPage]);
+
+  const totalPages = Math.ceil(filteredData.length / RECORDS_PER_PAGE);
 
   const renderItem = ({ item }: { item: TripRow }) => (
     <TouchableOpacity
@@ -271,11 +247,8 @@ export default function History() {
         <View className="mb-4 flex-row justify-center">
           <TouchableOpacity
             onPress={() => {
-              if (tab !== 'all') {
-                setTab('all');
-                setPage(1);
-                setHasMore(true);
-              }
+              setTab('all');
+              setCurrentPage(1);
             }}
             className={`mx-5 flex-1 items-center rounded-full border px-4 py-2 ${
               tab === 'all' ? 'border-[#1976D2] bg-[#1976D2]' : 'border-gray-300 bg-white'
@@ -288,11 +261,8 @@ export default function History() {
 
           <TouchableOpacity
             onPress={() => {
-              if (tab !== 'today') {
-                setTab('today');
-                setPage(1);
-                setHasMore(true);
-              }
+              setTab('today');
+              setCurrentPage(1);
             }}
             className={`mx-5 flex-1 items-center rounded-full border px-4 py-2 ${
               tab === 'today' ? 'border-[#1976D2] bg-[#1976D2]' : 'border-gray-300 bg-white'
@@ -315,12 +285,11 @@ export default function History() {
 
           {/* List */}
           <FlatList
-            data={displayed}
+            data={paginatedData}
             keyExtractor={(it) => it.id}
             renderItem={renderItem}
             contentContainerStyle={{ paddingBottom: 50, width: '95%', alignSelf: 'center' }}
-            onEndReached={loadMoreTrips}
-            onEndReachedThreshold={0.1}
+
             ListEmptyComponent={
               loading ? (
                 <ActivityIndicator size="large" color="#1976D2" className="mt-10" />
@@ -334,6 +303,65 @@ export default function History() {
               ) : null
             }
           />
+          
+          {totalPages > 1 && (
+            <View className="pb-4">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1" />
+                <View className="flex-row items-center gap-2">
+                  <TouchableOpacity
+                    onPress={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === 1 ? 'bg-gray-300' : 'bg-blue-600'}`}>
+                    <Text className={currentPage === 1 ? 'text-gray-500' : 'text-white'}>«</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === 1 ? 'bg-gray-300' : 'bg-blue-600'}`}>
+                    <Text className={currentPage === 1 ? 'text-gray-500' : 'text-white'}>‹</Text>
+                  </TouchableOpacity>
+                  <View className="h-9 w-12 items-center justify-center rounded-full bg-blue-600">
+                    <Text className="text-white font-semibold">{currentPage}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === totalPages ? 'bg-gray-300' : 'bg-blue-600'}`}>
+                    <Text className={currentPage === totalPages ? 'text-gray-500' : 'text-white'}>›</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === totalPages ? 'bg-gray-300' : 'bg-blue-600'}`}>
+                    <Text className={currentPage === totalPages ? 'text-gray-500' : 'text-white'}>»</Text>
+                  </TouchableOpacity>
+                </View>
+                <View className="flex-1 items-end">
+                  <TouchableOpacity
+                    onPress={() => setShowAllPages(!showAllPages)}
+                    className="h-9 w-9 items-center justify-center rounded-full bg-blue-600">
+                    <MaterialCommunityIcons name="view-grid" size={18} color="white" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {showAllPages && (
+                <View className="mt-3 flex-row flex-wrap justify-center gap-2">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    <TouchableOpacity
+                      key={page}
+                      onPress={() => {
+                        setCurrentPage(page);
+                        setShowAllPages(false);
+                      }}
+                      className={`h-8 w-8 items-center justify-center rounded-full ${currentPage === page ? 'bg-blue-600' : 'bg-gray-200'}`}>
+                      <Text className={currentPage === page ? 'text-white font-semibold text-xs' : 'text-gray-700 text-xs'}>{page}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
         </View>
       </View>
     </SafeAreaView>

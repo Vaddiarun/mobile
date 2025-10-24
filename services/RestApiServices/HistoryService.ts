@@ -11,7 +11,13 @@ export const getTripHistory = async (from: string, to: string, page: number = 1,
       return { success: false, error: "No authentication token found" };
     }
 
-    const response = await apiClient.get(EndPoints.GET_TRIP_HISTORY, {
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    params.append('page', page.toString());
+    params.append('limit', limit.toString());
+
+    const response = await apiClient.get(`${EndPoints.GET_TRIP_HISTORY}?${params.toString()}`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
