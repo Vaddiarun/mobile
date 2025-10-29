@@ -87,6 +87,9 @@ This document provides a comprehensive overview of what each file contributes to
 - **`components/StatusModel/StatusModel.tsx`** - Status message modal component (main modal for display)
 - **`components/StatusModel/index.ts`** - Export file for status modal
 
+### Data Visualization
+- **`components/DynamicLineChart.tsx`** - Interactive line chart component for temperature/humidity data visualization with threshold indicators, color-coded segments, and tap-to-view data points
+
 ## 🖼️ Assets & Resources
 
 ### Images
@@ -124,16 +127,33 @@ This document provides a comprehensive overview of what each file contributes to
 - **`QUICK_BUILD.bat`** - Quick build script for development (USE THIS SECOND)
 - **`GET_CRASH_LOGS.bat`** - Script to extract crash logs from device (TO GET LOGS FROM DEVICE while standalone apk is running)
 - **`BUILD_AAB.bat`** - Windows batch script to build Android App Bundle for playstore release
+- **`BUILD_COMMANDS.md`** - Comprehensive build commands and troubleshooting guide (alternative to batch scripts)
 
 ### Documentation & Fixes 
-- IMPORTANT : **`TRIP_START_FLOW_ANALYSIS.md`** - Understand bluetooth logic
-(IGNORE BELOW PLEASE)
+- **IMPORTANT: `TRIP_START_FLOW_ANALYSIS.md`** - Complete Bluetooth protocol flow analysis from QR scan to trip start/stop with packet structures and timing
+- **`FILE_DOCUMENTATION.md`** - This file - comprehensive project structure documentation
+[IGNORE BELOW, THEY ARE OLD]
 - **`README_BUILD.md`** - Build process documentation
-- **`EMERGENCY_FIX.md`** - Emergency fixes and workarounds
+- **`EMERGENCY_FIX.md`** - Emergency fixes and workarounds for build issues
 - **`FINAL_FIX.md`** - Final production fixes
-- **`MANUAL_FIX.md`** - Manual fix procedures
+- **`MANUAL_FIX.md`** - Manual fix procedures for common issues
 - **`RELEASE_BUILD_FIX.md`** - Release build specific fixes
 - **`TRIP_START_BUG_FIX.md`** - Trip start functionality bug fixes
+- **`TRIP_CROSS_DEVICE_FIX.md`** - Cross-device trip validation fixes (THIS IS RELEVANT)
+
+### Backup Configuration Files (For Build Troubleshooting)
+These backup files are provided for developers who face issues running or generating APK. If you encounter Gradle build errors, ProGuard issues, or configuration problems, you can restore these files:
+
+- **`android-app-build(.gradle)-backup`** - Backup of `android/app/build.gradle` with working configuration
+- **`android-build(.gradle)-backup`** - Backup of `android/build.gradle` with working Gradle settings
+- **`android-properties(.gradle)-backup`** - Backup of `android/gradle.properties` with correct memory and build settings
+- **`proguard-rules(.pro)-backup`** - Backup of `android/app/proguard-rules.pro` with proper obfuscation rules
+
+**How to use backup files:**
+1. If build fails, compare your current file with the backup
+2. Copy backup content to the actual file location
+3. Rename by removing `(.gradle)-backup` or `(.pro)-backup` extension
+4. Clean and rebuild: `cd android && ./gradlew clean && cd .. && npx expo run:android`
 
 ### Configuration Files
 - **`.gitignore`** - Git ignore patterns for the project

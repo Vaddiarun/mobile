@@ -14,6 +14,7 @@ import { BleManager, State as BleState } from 'react-native-ble-plx';
 import * as IntentLauncher from 'expo-intent-launcher';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useFocusEffect } from '@react-navigation/native';
+import StatusModal from '../../components/StatusModel';
 
 const ble = new BleManager();
 
@@ -23,6 +24,8 @@ export default function QRScanner() {
   const [isScanning, setIsScanning] = useState(false);
   const [cameraActive, setCameraActive] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useFocusEffect(
     useCallback(() => {
@@ -109,26 +112,35 @@ export default function QRScanner() {
       if (isScanning) return;
 
       try {
-        if (!value || value.trim() === '') {
-          Alert.alert('Invalid QR Code', 'Please scan a valid device QR code.');
+        const trimmedValue = value?.trim();
+        
+        // Validate QR code format (should be alphanumeric, 6-20 chars)
+        if (!trimmedValue || trimmedValue.length < 6 || trimmedValue.length > 20) {
+          setErrorMessage('Invalid QR code format. Please scan a valid device QR code.');
+          setShowErrorModal(true);
+          return;
+        }
+        
+        // Check if contains only valid characters (alphanumeric)
+        if (!/^[a-zA-Z0-9]+$/.test(trimmedValue)) {
+          setErrorMessage('QR code contains invalid characters. Please scan a valid device QR code.');
+          setShowErrorModal(true);
           return;
         }
 
         setIsScanning(true);
+        console.log('QR Code scanned:', trimmedValue);
 
-        // Bluetooth state will be checked in bluetooth-communication screen
-
-        console.log('QR Code scanned:', value);
-
-        // Use setTimeout to ensure navigation happens after state update
         setTimeout(() => {
           router.push({
             pathname: '/bluetooth-communication',
-            params: { qrCode: value.trim() },
+            params: { qrCode: trimmedValue },
           });
         }, 100);
       } catch (err) {
         console.error('Scan error:', err);
+        setErrorMessage('Failed to process QR code. Please try again.');
+        setShowErrorModal(true);
         setIsScanning(false);
       }
     },
@@ -209,6 +221,21 @@ export default function QRScanner() {
           <View style={[styles.corner, styles.bottomRight]} />
         </View>
       </View>
+      
+      <StatusModal
+        visible={showErrorModal}
+        type="error"
+        message="Invalid QR Code"
+        subMessage={errorMessage}
+        onClose={() => {
+          setShowErrorModal(false);
+          setErrorMessage('');
+          setIsScanning(false);
+          // Restart camera smoothly
+          setCameraActive(false);
+          setTimeout(() => setCameraActive(true), 100);
+        }}
+      />
     </View>
   );
 }

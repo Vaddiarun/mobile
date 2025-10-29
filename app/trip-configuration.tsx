@@ -309,7 +309,7 @@ export default function TripConfiguration() {
 
       const customerProfiles = res?.data?.data?.customerProfiles ?? [];
       const boxList: any[] = res?.data?.data?.boxProfiles ?? [];
-      
+
       // Check if profiles are empty
       if (customerProfiles.length === 0 || boxList.length === 0) {
         console.error('❌ Empty profiles received from API');
@@ -319,7 +319,7 @@ export default function TripConfiguration() {
         setModelLoader(true);
         return;
       }
-      
+
       const customized = [...boxList, { boxProfile: customizeProfile }];
       setBoxProfiles(customized);
       setProfilesData(res.data?.data);
@@ -375,7 +375,7 @@ export default function TripConfiguration() {
     console.log('User:', user ? 'authenticated' : 'using dev mode');
     getProfiles(user?.data?.token);
     fetchLocation();
-    
+
     // Load trip data from API for stop view
     if (statusTrip === 1) {
       const loadTripData = async () => {
@@ -487,9 +487,9 @@ export default function TripConfiguration() {
       deviceID: deviceName,
       startLocation: startLat,
       tripConfig,
-      timestamp: tripStartTime,
-      createdAt: tripStartTime,
-      status: 'Started',
+      // timestamp: tripStartTime,
+      // createdAt: tripStartTime,
+      // status: 'Started',
     };
 
     console.log('📡 Starting trip...');
@@ -549,11 +549,7 @@ export default function TripConfiguration() {
       startBuffer.writeUInt32LE(0, offset);
       const startCommand = startBuffer.toString('base64');
 
-      await connected.writeCharacteristicWithResponseForService(
-        serviceUUID,
-        rxUUID,
-        startCommand
-      );
+      await connected.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, startCommand);
       console.log('✅ Sent A3 start command to device (interval: 60s)');
 
       // Wait for acknowledgment
@@ -578,14 +574,20 @@ export default function TripConfiguration() {
       })
       .then((res) => {
         console.log('✅ Trip started successfully:', res.data);
-        saveTrip(body);
+        // Store trip with start time for filtering later
+        saveTrip({ ...body, tripStartTime });
         setModalType('success');
         setModelLoader(true);
       })
       .catch((err) => {
         console.error('❌ Start trip error:', err?.response?.data || err?.message);
-        const isValidationError = err?.response?.status === 400 || err?.response?.status === 403 || err?.response?.data?.message?.toLowerCase().includes('validation');
-        const errorMsg = isValidationError ? 'You cannot start/stop a trip for another user' : (err?.response?.data?.message || 'Failed to start trip. Please try again.');
+        const isValidationError =
+          err?.response?.status === 400 ||
+          err?.response?.status === 403 ||
+          err?.response?.data?.message?.toLowerCase().includes('validation');
+        const errorMsg = isValidationError
+          ? 'You cannot start/stop a trip for another user'
+          : err?.response?.data?.message || 'Failed to start trip. Please try again.';
         setModalType('error');
         setModalMessage('Cannot Start Trip');
         setModalSubMessage(errorMsg);
@@ -749,14 +751,49 @@ export default function TripConfiguration() {
 
       await dataPromise;
 
-      // Use all packets to prevent data loss
-      console.log('📊 Using all packets without filtering to prevent data loss');
+      // HARD FILTER: Remove all packets before trip start time
+      // Extract timestamp from trip name: Trip_TF900001_1761717702649
+      let tripStartTime = 0;
+      const tripNameMatch = activeTrip.tripName?.match(/_([0-9]+)$/);
+      if (tripNameMatch) {
+        tripStartTime = parseInt(tripNameMatch[1]);
+      }
+      
+      // Fallback: check local storage
+      if (!tripStartTime) {
+        const localTrips = getTrips() || [];
+        const localTrip = localTrips.find((t: any) => t.deviceID === deviceName);
+        tripStartTime = localTrip?.tripStartTime || 0;
+      }
+      
+      const tripStartSeconds = Math.floor(tripStartTime / 1000);
+      
+      console.log('📊 FILTERING packets:');
+      console.log('  Trip name:', activeTrip.tripName);
+      console.log('  Trip start time (ms):', tripStartTime);
+      console.log('  Trip start time (seconds):', tripStartSeconds);
       console.log('  Total packets from device:', collectedPackets.length);
       
-      actualPackets = collectedPackets;
+      if (collectedPackets.length > 0) {
+        console.log('  First packet time:', collectedPackets[0].time);
+        console.log('  Last packet time:', collectedPackets[collectedPackets.length - 1].time);
+      }
+
+      // Filter: Only keep packets where packet.time >= trip start time (in seconds)
+      actualPackets = collectedPackets.filter((packet: any) => {
+        const keep = packet.time >= tripStartSeconds;
+        if (!keep) {
+          console.log('  ❌ Removing packet with time:', packet.time, '(before trip start)');
+        }
+        return keep;
+      });
+      
       actualTotalPackets = d4Info?.totalPackets || collectedPackets.length;
       batteryPercentage = d4Info?.batteryPercentage || 0;
-      console.log('✅ Data collected and filtered:', actualPackets.length, 'packets');
+      
+      console.log('✅ Filtering complete:');
+      console.log('  Packets kept:', actualPackets.length);
+      console.log('  Packets removed:', collectedPackets.length - actualPackets.length);
 
       await new Promise((resolve) => setTimeout(resolve, 500));
 
@@ -819,8 +856,13 @@ export default function TripConfiguration() {
       })
       .catch((err) => {
         console.error('❌ Stop trip error:', err?.response?.data || err?.message);
-        const isValidationError = err?.response?.status === 400 || err?.response?.status === 403 || err?.response?.data?.message?.toLowerCase().includes('validation');
-        const errorMsg = isValidationError ? 'You cannot start/stop a trip for another user' : (err?.response?.data?.message || 'Failed to stop trip. Please try again.');
+        const isValidationError =
+          err?.response?.status === 400 ||
+          err?.response?.status === 403 ||
+          err?.response?.data?.message?.toLowerCase().includes('validation');
+        const errorMsg = isValidationError
+          ? 'You cannot start/stop a trip for another user'
+          : err?.response?.data?.message || 'Failed to stop trip. Please try again.';
         setModalType('error');
         setModalMessage('Cannot Stop Trip');
         setModalSubMessage(errorMsg);
@@ -951,8 +993,20 @@ export default function TripConfiguration() {
                   <View className="mt-4 flex-row items-center justify-between">
                     <Text className="text-[16px] text-[#444]">Humid (%Rh)</Text>
                     <View className="flex-row items-center gap-6">
-                      <Counter value={humMin} setValue={setHumMin} label="Min" showLabel={false} isHumidity={true} />
-                      <Counter value={humMax} setValue={setHumMax} label="Max" showLabel={false} isHumidity={true} />
+                      <Counter
+                        value={humMin}
+                        setValue={setHumMin}
+                        label="Min"
+                        showLabel={false}
+                        isHumidity={true}
+                      />
+                      <Counter
+                        value={humMax}
+                        setValue={setHumMax}
+                        label="Max"
+                        showLabel={false}
+                        isHumidity={true}
+                      />
                     </View>
                   </View>
 
@@ -985,7 +1039,7 @@ export default function TripConfiguration() {
               <View className="mt-1 flex-row items-center">
                 <TextInput
                   className="flex-1 rounded-md border border-[#7D94EF] bg-white p-3 text-black"
-                  style={{ height: location === '' ? 60 : undefined }}
+                  style={{ height: location === '' ? 60 : undefined, paddingRight: 40 }}
                   value={location}
                   editable={false}
                   placeholder="Current Location"
@@ -1045,7 +1099,7 @@ export default function TripConfiguration() {
               <View className="mt-1 flex-row items-center">
                 <TextInput
                   className="flex-1 rounded-md border border-[#7D94EF] bg-white p-3 text-black"
-                  style={{ height: location === '' ? 60 : undefined }}
+                  style={{ height: location === '' ? 60 : undefined, paddingRight: 40 }}
                   value={location}
                   editable={false}
                   placeholder="Current Location"
@@ -1077,10 +1131,18 @@ export default function TripConfiguration() {
           {/* Submit */}
           <View className="items-center py-5">
             <TouchableOpacity
-              disabled={location === '' || (statusTrip === 0 && (!profilesData?.customerProfiles?.length || !boxProfiles?.length))}
+              disabled={
+                location === '' ||
+                (statusTrip === 0 &&
+                  (!profilesData?.customerProfiles?.length || !boxProfiles?.length))
+              }
               onPress={statusTrip === 0 ? handleStartTrip : handleStopTrip}
               className={`h-[56px] w-1/2 items-center justify-center rounded-full ${
-                location === '' || (statusTrip === 0 && (!profilesData?.customerProfiles?.length || !boxProfiles?.length)) ? 'bg-gray-300' : 'bg-[#1a50db]'
+                location === '' ||
+                (statusTrip === 0 &&
+                  (!profilesData?.customerProfiles?.length || !boxProfiles?.length))
+                  ? 'bg-gray-300'
+                  : 'bg-[#1a50db]'
               }`}>
               <Text
                 className={`text-center text-base font-semibold ${location === '' || (statusTrip === 0 && (!profilesData?.customerProfiles?.length || !boxProfiles?.length)) ? 'text-gray-600' : 'text-white'}`}>
