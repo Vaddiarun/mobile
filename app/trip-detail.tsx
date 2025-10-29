@@ -163,7 +163,7 @@ export default function TripDetail() {
           const getColor = (value, min, max, isTemp) => {
             if (value < min || value > max) return isTemp ? '#EF4444' : '#F97316';
             if (value === min || value === max) return '#F59E0B';
-            return isTemp ? '#22C55E' : '#15803D';
+            return isTemp ? '#3B82F6' : '#22C55E';
           };
 
           const createSegments = (data, isTemp) => {
@@ -290,9 +290,9 @@ export default function TripDetail() {
               
               <!-- Legend -->
               <rect x="${padding}" y="${svgHeight - 50}" width="${chartWidth}" height="40" fill="#f9f9f9" stroke="#ddd" rx="4"/>
-              <rect x="${padding + 10}" y="${svgHeight - 40}" width="20" height="3" fill="#22C55E"/>
+              <rect x="${padding + 10}" y="${svgHeight - 40}" width="20" height="3" fill="#3B82F6"/>
               <text x="${padding + 35}" y="${svgHeight - 35}" font-size="10" fill="#666">Temperature</text>
-              <rect x="${padding + 120}" y="${svgHeight - 40}" width="20" height="3" fill="#15803D"/>
+              <rect x="${padding + 120}" y="${svgHeight - 40}" width="20" height="3" fill="#22C55E"/>
               <text x="${padding + 145}" y="${svgHeight - 35}" font-size="10" fill="#666">Humidity</text>
               <rect x="${padding + 220}" y="${svgHeight - 40}" width="20" height="3" fill="#EF4444" stroke-dasharray="2,2"/>
               <text x="${padding + 245}" y="${svgHeight - 35}" font-size="10" fill="#666">Temp Limits</text>
@@ -477,10 +477,10 @@ export default function TripDetail() {
           </>
         )}
 
-        {/* Thresholds & Legend */}
+        {/* Thresholds */}
         {thresholds && (
           <View className="mt-3 rounded-lg bg-gray-100 p-3">
-            <View className="mb-2 flex-row justify-around">
+            <View className="flex-row justify-around">
               <View className="items-center">
                 <Text className="text-xs text-gray-500">Temp Range</Text>
                 <Text className="text-sm font-semibold text-gray-700">
@@ -492,22 +492,6 @@ export default function TripDetail() {
                 <Text className="text-sm font-semibold text-gray-700">
                   {thresholds.humMin}% - {thresholds.humMax}%
                 </Text>
-              </View>
-            </View>
-            <View className="mt-2 flex-row items-center justify-around border-t border-gray-300 pt-2">
-              <View className="flex-row items-center">
-                <View className="mr-1 h-3 w-3 rounded-full bg-green-500" />
-                <Text className="text-xs text-gray-600">Normal</Text>
-              </View>
-              <View className="flex-row items-center">
-                <View className="mr-1 h-3 w-3 rounded-full bg-yellow-500" />
-                <Text className="text-xs text-gray-600" numberOfLines={1}>
-                  At Limit
-                </Text>
-              </View>
-              <View className="flex-row items-center">
-                <View className="mr-1 h-3 w-3 rounded-full bg-red-500" />
-                <Text className="text-xs text-gray-600">Exceeds</Text>
               </View>
             </View>
           </View>
@@ -544,7 +528,7 @@ export default function TripDetail() {
               <View className="mt-3 items-center">
                 <View className="mb-2 w-full flex-row justify-between px-8">
                   <View className="flex-1 flex-row items-center">
-                    <View className="mr-2 h-3 w-8 bg-green-500" />
+                    <View className="mr-2 h-3 w-8 bg-blue-500" />
                     <Text className="text-xs text-gray-600">Temperature</Text>
                   </View>
                   <View className="flex-1 flex-row items-center">
@@ -554,7 +538,7 @@ export default function TripDetail() {
                 </View>
                 <View className="w-full flex-row justify-between px-8">
                   <View className="flex-1 flex-row items-center">
-                    <View className="mr-2 h-3 w-8 bg-green-700" />
+                    <View className="mr-2 h-3 w-8 bg-green-500" />
                     <Text className="text-xs text-gray-600">Humidity</Text>
                   </View>
                   <View className="flex-1 flex-row items-center">

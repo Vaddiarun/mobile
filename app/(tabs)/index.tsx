@@ -238,7 +238,9 @@ export default function Home() {
         {/* Recent Activity */}
         <View className="mb-3 mt-6 flex-row justify-between">
           <Text className="text-[17px] font-bold text-black">Recent Activity</Text>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/history')}>
+          <TouchableOpacity onPress={() => {
+            router.push({ pathname: '/(tabs)/history', params: { forceTab: 'all' } });
+          }}>
             <Text className="text-sm text-blue-600">Show all</Text>
           </TouchableOpacity>
         </View>

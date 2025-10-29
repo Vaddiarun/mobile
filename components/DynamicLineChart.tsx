@@ -40,7 +40,7 @@ export default function DynamicLineChart({ packets, thresholds, width, height }:
   const getColor = (value: number, min: number, max: number, isTemp: boolean) => {
     if (value < min || value > max) return isTemp ? '#EF4444' : '#F97316';
     if (value === min || value === max) return '#F59E0B';
-    return isTemp ? '#22C55E' : '#15803D';
+    return isTemp ? '#3B82F6' : '#22C55E';
   };
 
   const createSegments = (data: number[], isTemp: boolean) => {

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { getTripHistory } from '../../services/RestApiServices/HistoryService';
@@ -26,10 +26,20 @@ type TripRow = {
 
 export default function History() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const tabH = useBottomTabBarHeight();
 
   const [tab, setTab] = useState<'all' | 'today'>('all');
+
+  // Force tab to 'all' when coming from home page
+  useFocusEffect(
+    useCallback(() => {
+      if (params.forceTab === 'all') {
+        setTab('all');
+      }
+    }, [params.forceTab])
+  );
   const [allData, setAllData] = useState<TripRow[]>([]);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

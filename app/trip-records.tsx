@@ -169,6 +169,26 @@ export default function TripRecords() {
         <View className="w-10" />
       </View>
 
+      {/* Legend */}
+      {thresholds && (
+        <View className="mx-4 mt-3 rounded-lg bg-gray-100 p-3">
+          <View className="flex-row items-center justify-around">
+            <View className="flex-row items-center">
+              <View className="mr-1 h-3 w-3 rounded-full bg-green-500" />
+              <Text className="text-xs text-gray-600">Normal</Text>
+            </View>
+            <View className="flex-row items-center">
+              <View className="mr-1 h-3 w-3 rounded-full bg-yellow-500" />
+              <Text className="text-xs text-gray-600" numberOfLines={1}>At Limit</Text>
+            </View>
+            <View className="flex-row items-center">
+              <View className="mr-1 h-3 w-3 rounded-full bg-red-500" />
+              <Text className="text-xs text-gray-600">Exceeds</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Records Table */}
       <View className="flex-1 px-4 pt-4">
         <Text className="mb-3 text-sm font-semibold text-gray-700">
