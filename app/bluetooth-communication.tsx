@@ -36,6 +36,7 @@ export default function BluetoothCommunication() {
   const [modalMessage, setModalMessage] = useState('');
   const [modalSubMessage, setModalSubMessage] = useState('');
   const [scaning, setScaning] = useState(false);
+  const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [devices, setDevices] = useState<any[]>([]);
   const mountedRef = useRef(false);
   const deviceFoundRef = useRef(false);
@@ -90,18 +91,18 @@ export default function BluetoothCommunication() {
     setScaning(true);
 
     try {
-      console.log('Starting aggressive Bluetooth scan for device:', qrCode);
+      console.log('🔥 ULTRA-AGGRESSIVE BLE SCAN INITIATED');
 
       // Try cached session first for instant reconnection
       const cachedSession = bleSessionStore.getSession(qrCode as string);
       if (cachedSession && Date.now() - cachedSession.timestamp < 300000) {
-        console.log('Attempting cached device reconnection...');
+        console.log('⚡ Attempting instant cached reconnection...');
         try {
           const cachedDevice = await bleManager.connectToDevice(cachedSession.deviceId, {
-            timeout: 3000,
+            timeout: 2000,
           });
           if (cachedDevice) {
-            console.log('✅ Instant reconnection successful!');
+            console.log('✅ INSTANT RECONNECTION SUCCESS!');
             deviceFoundRef.current = true;
             bleManager.stopDeviceScan();
             setScaning(false);
@@ -109,18 +110,19 @@ export default function BluetoothCommunication() {
             return;
           }
         } catch (cacheError) {
-          console.log('Cached reconnection failed, proceeding with scan');
+          console.log('Cache miss, starting power scan...');
         }
       }
 
-      // Multi-pass scanning strategy
+      // ULTRA-AGGRESSIVE: Continuous rapid scanning
       let scanAttempt = 0;
-      const maxAttempts = 3;
+      const maxAttempts = 5;
       const foundDevices = new Map<string, Device>();
+      let bestDevice: { device: Device; rssi: number } | null = null;
 
       const attemptScan = () => {
         scanAttempt++;
-        console.log(`Scan attempt ${scanAttempt}/${maxAttempts}`);
+        console.log(`🔍 POWER SCAN ${scanAttempt}/${maxAttempts} - FULL SPECTRUM`);
 
         bleManager.startDeviceScan(
           null,
@@ -142,14 +144,19 @@ export default function BluetoothCommunication() {
         }
 
         if (device?.name === (qrCode as string)) {
+          const rssi = device.rssi || -100;
+          
           if (!foundDevices.has(device.id)) {
             foundDevices.set(device.id, device);
-            console.log(`✅ Device found (RSSI: ${device.rssi})`);
+            console.log(`🎯 TARGET ACQUIRED! RSSI: ${rssi}dBm`);
           }
 
-          // Connect immediately on first strong signal
-          if (!deviceFoundRef.current && device.rssi && device.rssi > -75) {
-            console.log('Strong signal detected, connecting immediately...');
+          if (!bestDevice || rssi > bestDevice.rssi) {
+            bestDevice = { device, rssi };
+          }
+
+          if (!deviceFoundRef.current && rssi > -85) {
+            console.log(`⚡ CONNECTING INSTANTLY (RSSI: ${rssi}dBm)`);
             deviceFoundRef.current = true;
             if (scanTimeoutRef.current) {
               clearTimeout(scanTimeoutRef.current);
@@ -164,33 +171,35 @@ export default function BluetoothCommunication() {
         );
       };
 
-      // Start first scan
       attemptScan();
 
-      // Set timeout for each scan attempt
       scanTimeoutRef.current = setTimeout(async () => {
         if (!deviceFoundRef.current && mountedRef.current) {
           bleManager.stopDeviceScan();
 
           if (scanAttempt < maxAttempts) {
-            console.log('Retrying scan...');
-            await new Promise(resolve => setTimeout(resolve, 500));
+            console.log(`🔄 RAPID RETRY ${scanAttempt + 1}/${maxAttempts}`);
+            await new Promise(resolve => setTimeout(resolve, 200));
             attemptScan();
+          } else if (bestDevice) {
+            console.log(`🎯 CONNECTING TO BEST SIGNAL (RSSI: ${bestDevice.rssi}dBm)`);
+            deviceFoundRef.current = true;
+            setScaning(false);
+            await handleDeviceConnection(bestDevice.device);
           } else if (foundDevices.size > 0) {
-            // Connect to any found device even with weak signal
-            console.log('Connecting to device with weak signal...');
+            console.log('🎯 CONNECTING TO ANY FOUND DEVICE');
             const device = Array.from(foundDevices.values())[0];
             deviceFoundRef.current = true;
             setScaning(false);
             await handleDeviceConnection(device);
           } else {
-            console.log('Device not found after all attempts');
+            console.log('❌ DEVICE NOT FOUND AFTER POWER SCAN');
             setLoading(false);
             setScaning(false);
             setModelLoader(true);
           }
         }
-      }, 10000);
+      }, 5000);
     } catch (e) {
       console.error('Scan initialization error:', e);
       setLoading(false);
@@ -210,7 +219,11 @@ export default function BluetoothCommunication() {
 
       connectedDevice.onDisconnected((error, device) => {
         if (error || device?.name) {
-          console.log('Device disconnected:', device?.name, error?.message);
+          console.log('⚠️ Device disconnected:', device?.name, error?.message);
+          
+          if (!hasNavigatedRef.current && mountedRef.current) {
+            setShowDisconnectModal(true);
+          }
         }
         if (monitorSubscriptionRef.current && !hasNavigatedRef.current) {
           try {
@@ -681,6 +694,16 @@ export default function BluetoothCommunication() {
           setModelLoader(false);
           setModalMessage('');
           setModalSubMessage('');
+          router.back();
+        }}
+      />
+      <StatusModal
+        visible={showDisconnectModal}
+        type="error"
+        message="Bluetooth Device Disconnected"
+        subMessage="Connection lost due to weak signal. Please try again or move your mobile device closer to the sensor."
+        onClose={() => {
+          setShowDisconnectModal(false);
           router.back();
         }}
       />

@@ -1,5 +1,5 @@
 // app/trip-detail.tsx
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Buffer } from 'buffer';
 import {
   View,
@@ -19,6 +19,7 @@ import { captureRef } from 'react-native-view-shot';
 import { useRef } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTrips } from '../mmkv-storage/storage';
 import { getTripDetails } from '../services/RestApiServices/HistoryService';
@@ -35,55 +36,92 @@ export default function TripDetail() {
   const { tripName } = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
   const [apiTrip, setApiTrip] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const chartRef = useRef(null);
 
-  useEffect(() => {
-    const fetchTripDetails = async () => {
-      if (!tripName) {
-        setLoading(false);
-        return;
-      }
+  const fetchTripDetails = useCallback(async (retryCount = 0) => {
+    setLoading(true);
+    setError(null);
+    
+    if (!tripName) {
+      console.log('[TripDetail] No tripName provided');
+      setError('No trip name provided');
+      setLoading(false);
+      return;
+    }
 
-      /* ========== TESTING: COMMENT FROM HERE TO REMOVE TEST DATA ========== */
-      if (tripName === 'TEST_TRIP_200') {
-        const fakeRecords = Array.from({ length: 200 }, (_, i) => ({
-          Timestamp: String(Math.floor(Date.now() / 1000) - (200 - i) * 60),
-          Temperature: String(20 + Math.random() * 10),
-          Humidity: String(50 + Math.random() * 30),
-        }));
-        setApiTrip({
-          tripInfo: {
-            tripName: 'TEST_TRIP_200',
-            deviceid: 'TEST_DEVICE',
-            deviceID: 'TEST_DEVICE',
-            tripConfig: {
-              customerProfile: { profileName: 'Test Customer' },
-              boxProfile: {
-                profileName: 'Test Box',
-                minTemp: 15,
-                maxTemp: 24,
-                minHum: 60,
-                maxHum: 90,
-              },
+    console.log('[TripDetail] Fetching trip:', tripName, 'Retry:', retryCount);
+
+    /* ========== TESTING: COMMENT FROM HERE TO REMOVE TEST DATA ========== */
+    if (tripName === 'TEST_TRIP_200') {
+      const fakeRecords = Array.from({ length: 200 }, (_, i) => ({
+        Timestamp: String(Math.floor(Date.now() / 1000) - (200 - i) * 60),
+        Temperature: String(20 + Math.random() * 10),
+        Humidity: String(50 + Math.random() * 30),
+      }));
+      setApiTrip({
+        tripInfo: {
+          tripName: 'TEST_TRIP_200',
+          deviceid: 'TEST_DEVICE',
+          deviceID: 'TEST_DEVICE',
+          tripConfig: {
+            customerProfile: { profileName: 'Test Customer' },
+            boxProfile: {
+              profileName: 'Test Box',
+              minTemp: 15,
+              maxTemp: 24,
+              minHum: 60,
+              maxHum: 90,
             },
           },
-          records: fakeRecords,
-        });
-        setLoading(false);
+        },
+        records: fakeRecords,
+      });
+      setLoading(false);
+      return;
+    }
+    /* ========== TESTING: COMMENT TO HERE TO REMOVE TEST DATA ========== */
+
+    try {
+      const result = await getTripDetails(String(tripName));
+      console.log('[TripDetail] API result:', JSON.stringify(result, null, 2));
+      
+      if (result.success && result.data) {
+        console.log('[TripDetail] Trip data received');
+        setApiTrip(result.data);
+        setError(null);
+      } else {
+        const errorMsg = result.error || 'Failed to load trip data';
+        console.log('[TripDetail] API failed:', errorMsg);
+        setError(errorMsg);
+        
+        if (retryCount < 2) {
+          console.log('[TripDetail] Retrying...');
+          setTimeout(() => fetchTripDetails(retryCount + 1), 1000);
+          return;
+        }
+      }
+    } catch (err: any) {
+      const errorMsg = err.message || 'Network error';
+      console.log('[TripDetail] Exception:', errorMsg);
+      setError(errorMsg);
+      
+      if (retryCount < 2) {
+        console.log('[TripDetail] Retrying after exception...');
+        setTimeout(() => fetchTripDetails(retryCount + 1), 1000);
         return;
       }
-      /* ========== TESTING: COMMENT TO HERE TO REMOVE TEST DATA ========== */
-
-      const result = await getTripDetails(String(tripName));
-      if (result.success && result.data) {
-        setApiTrip(result.data);
-      }
-      setLoading(false);
-    };
-
-    fetchTripDetails();
+    }
+    
+    setLoading(false);
   }, [tripName]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchTripDetails(0);
+    }, [fetchTripDetails])
+  );
 
   const trip = apiTrip?.tripInfo;
 
@@ -406,11 +444,33 @@ export default function TripDetail() {
     );
   }
 
-  if (!trip) {
+  if (!trip && !loading) {
     return (
       <SafeAreaView className="flex-1 bg-white">
-        <View className="flex-1 items-center justify-center">
-          <Text className="text-gray-500">Trip not found</Text>
+        <View className="flex-row items-center justify-between border-b border-gray-200 bg-white px-4 pb-3 pt-1">
+          <Pressable
+            className="h-10 w-10 items-center justify-center"
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Back">
+            <MaterialCommunityIcons name="arrow-left" size={24} color="#000" />
+          </Pressable>
+          <Text className="text-lg font-semibold text-black">Trip Details</Text>
+          <View className="w-10" />
+        </View>
+        <View className="flex-1 items-center justify-center px-8">
+          <MaterialCommunityIcons name="alert-circle-outline" size={64} color="#EF4444" />
+          <Text className="mt-4 text-center text-xl font-semibold text-gray-800">
+            {error || 'Trip not found'}
+          </Text>
+          <Text className="mt-2 text-center text-sm text-gray-500">
+            {error ? 'Unable to load trip data. Please check your connection.' : 'This trip does not exist or has been deleted.'}
+          </Text>
+          <TouchableOpacity
+            onPress={() => fetchTripDetails(0)}
+            className="mt-6 rounded-lg bg-blue-600 px-8 py-3">
+            <Text className="text-base font-semibold text-white">Retry</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );

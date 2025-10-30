@@ -43,31 +43,48 @@ export default function History() {
   const [allData, setAllData] = useState<TripRow[]>([]);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [showAllPages, setShowAllPages] = useState(false);
   const RECORDS_PER_PAGE = 10;
 
-  const loadAllTrips = useCallback(async (from: string, to: string) => {
+  const loadAllTrips = useCallback(async (from: string, to: string, retryCount = 0) => {
     setLoading(true);
+    setError(null);
+    console.log('[History] Loading trips from:', from, 'to:', to, 'Retry:', retryCount);
     try {
       let allTrips: any[] = [];
       let page = 1;
       let totalPages = 1;
 
       do {
+        console.log('[History] Fetching page:', page);
         const result = await getTripHistory(from, to, page, 50);
+        console.log('[History] Page', page, 'result:', JSON.stringify(result, null, 2));
 
         if (result.success && result.data) {
-          if (result.data.trips) {
+          if (result.data.trips && Array.isArray(result.data.trips)) {
+            console.log('[History] Found', result.data.trips.length, 'trips on page', page);
             allTrips = [...allTrips, ...result.data.trips];
           }
           totalPages = result.data.meta?.totalPages || 1;
           page++;
         } else {
+          console.log('[History] API failed on page', page, ':', result.error);
+          if (page === 1) {
+            setError(result.error || 'Failed to load trips');
+            if (retryCount < 2) {
+              console.log('[History] Retrying...');
+              setTimeout(() => loadAllTrips(from, to, retryCount + 1), 1000);
+              return;
+            }
+          }
           break;
         }
       } while (page <= totalPages);
+
+      console.log('[History] Total trips loaded:', allTrips.length);
 
       const formatted: TripRow[] = allTrips
         .sort((a: any, b: any) => (b.startTime || 0) - (a.startTime || 0))
@@ -89,9 +106,18 @@ export default function History() {
           };
         });
 
+      console.log('[History] Formatted trips:', formatted.length);
       setAllData(formatted);
-    } catch (error) {
-      console.error('Error loading trips:', error);
+      setError(null);
+    } catch (err: any) {
+      console.error('[History] Exception:', err);
+      const errorMsg = err.message || 'Network error';
+      setError(errorMsg);
+      if (retryCount < 2) {
+        console.log('[History] Retrying after exception...');
+        setTimeout(() => loadAllTrips(from, to, retryCount + 1), 1000);
+        return;
+      }
     } finally {
       setLoading(false);
     }
@@ -120,6 +146,7 @@ export default function History() {
 
   useFocusEffect(
     useCallback(() => {
+      setLoading(true);
       const today = new Date();
       const from =
         tab === 'today'
@@ -300,6 +327,25 @@ export default function History() {
             ListEmptyComponent={
               loading ? (
                 <ActivityIndicator size="large" color="#1976D2" className="mt-10" />
+              ) : error ? (
+                <View className="mt-10 items-center px-4">
+                  <MaterialCommunityIcons name="alert-circle-outline" size={48} color="#EF4444" />
+                  <Text className="mt-3 text-center text-lg font-semibold text-gray-800">{error}</Text>
+                  <Text className="mt-1 text-center text-sm text-gray-500">Please check your connection</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const today = new Date();
+                      const from =
+                        tab === 'today'
+                          ? today.toISOString().split('T')[0]
+                          : new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                      const to = today.toISOString().split('T')[0];
+                      loadAllTrips(from, to, 0);
+                    }}
+                    className="mt-4 rounded-lg bg-blue-600 px-6 py-2">
+                    <Text className="text-base font-semibold text-white">Retry</Text>
+                  </TouchableOpacity>
+                </View>
               ) : (
                 <Text className="mt-20 text-center text-3xl text-gray-400">No trips found</Text>
               )
