@@ -90,7 +90,7 @@ export default function Home() {
             return {
               id: trip.deviceid || '—',
               time: formatDate(timestamp),
-              status: isCompleted ? 'Turned off' : 'Turned on',
+              status: isCompleted ? 'Completed' : 'Initiated',
             };
           });
         setRecentActivity(recent);
@@ -174,29 +174,28 @@ export default function Home() {
     <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-white">
       <ScrollView
         className="px-4"
-        contentContainerStyle={{ paddingTop: 16 + insets.top, paddingBottom: tabH + 24 }}
+        contentContainerStyle={{ paddingTop: 1 + insets.top, paddingBottom: tabH + 24 }}
         showsVerticalScrollIndicator={false}>
         {/* Greeting */}
         <View className="mb-6 flex-row items-start justify-between">
           <View>
             <Text className="text-4xl font-semibold text-black">Hello, {userName}</Text>
-            <Text className="mt-1 text-sm text-gray-600">A quick look at your devices</Text>
+            <Text className="mt-1 text-sm text-gray-600">A quick look at your trips</Text>
           </View>
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Settings"
-            onPress={() => router.push('/settings' as any)}
-            className="mt-4">
-            <MaterialCommunityIcons name="cog-outline" size={30} color="#000" />
+            onPress={() => router.push('/settings' as any)}>
+            <MaterialCommunityIcons name="account-circle-outline" size={40} color="#000" />
           </TouchableOpacity>
         </View>
 
         {/* Trip summary */}
         <View className="mb-5 mt-3 rounded-xl bg-gray-100 p-4 py-10">
-          <Text className="mb-3 text-2xl font-bold text-black">What You Did Today</Text>
+          <Text className="mb-3 text-2xl font-bold text-black">Today’s Trip Overview</Text>
           <View className="flex-row justify-between">
             <View className="flex-1 items-start">
-              <Text className="mb-2 text-xl font-semibold text-neutral-900">Trip On</Text>
+              <Text className="mb-2 text-xl font-semibold text-neutral-900">Initiated</Text>
               {/* <Text className="text-md mb-1 text-gray-600">Active devices</Text> */}
               <Text className="text-6xl font-semibold text-blue-600">
                 {tripOn.toString().padStart(2, '0')}
@@ -204,7 +203,7 @@ export default function Home() {
             </View>
             <View className="flex-1 items-start">
               <Text className="mb-2 text-xl font-semibold text-neutral-900" numberOfLines={1}>
-                Trip Off
+                Completed
               </Text>
               {/* <Text className="text-md mb-1 text-gray-600">Inactive devices</Text> */}
               <Text className="text-6xl font-semibold text-blue-600">
@@ -238,10 +237,11 @@ export default function Home() {
         {/* Recent Activity */}
         <View className="mb-3 mt-6 flex-row justify-between">
           <Text className="text-[17px] font-bold text-black">Recent Activity</Text>
-          <TouchableOpacity onPress={() => {
-            router.push({ pathname: '/(tabs)/history', params: { forceTab: 'all' } });
-          }}>
-            <Text className="text-sm text-blue-600">Show all</Text>
+          <TouchableOpacity
+            onPress={() => {
+              router.push({ pathname: '/(tabs)/history', params: { forceTab: 'all' } });
+            }}>
+            <Text className="text-lg text-blue-600 underline">Show all</Text>
           </TouchableOpacity>
         </View>
 
@@ -250,15 +250,25 @@ export default function Home() {
             recentActivity.map((item, index) => (
               <View
                 key={`${item.id}-${index}`}
-                className="flex-row justify-between border-b border-gray-200 py-3.5">
-                <Text className="flex-1 text-base font-semibold text-black">{item.id}</Text>
-                <Text className="flex-1 text-center text-[13px] text-gray-600">{item.time}</Text>
-                <View className="flex-1 flex-row items-center justify-end">
+                className="flex-row items-center border-b border-gray-200 py-3.5">
+                <Text
+                  className="flex-1 text-center text-base font-semibold text-black"
+                  numberOfLines={1}>
+                  {item.id}
+                </Text>
+                <Text
+                  className="flex-[2.6] text-center text-[13px] text-gray-600"
+                  numberOfLines={1}>
+                  {item.time}
+                </Text>
+                <View className="w-3 items-center justify-center">
                   <View
-                    className={`mr-1.5 h-3 w-3 rounded-full ${item.status === 'Turned on' ? 'bg-green-500' : 'bg-red-500'}`}
+                    className={`h-3 w-3 rounded-full ${item.status === 'Initiated' ? 'bg-green-500' : 'bg-red-500'}`}
                   />
-                  <Text className="text-[13px] text-black">{item.status}</Text>
                 </View>
+                <Text className="ml-1.5 flex-1 text-[13px] text-black" numberOfLines={1}>
+                  {item.status}
+                </Text>
               </View>
             ))
           ) : (

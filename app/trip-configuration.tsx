@@ -884,9 +884,7 @@ export default function TripConfiguration() {
             <MaterialCommunityIcons name="arrow-left" size={22} color="#000" />
           </Pressable>
           <Text className="text-base font-semibold text-black">Trip Configuration</Text>
-          <Pressable className="h-10 w-10 items-center justify-center">
-            <MaterialCommunityIcons name="dots-vertical" size={20} color="#000" />
-          </Pressable>
+          <View className="h-10 w-10" />
         </View>
 
         <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingBottom: 24 }}>

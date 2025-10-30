@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Animated, Easing, Alert, TouchableOpacity } from 'react-native';
+import { View, Animated, Easing, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BleManager, Device } from 'react-native-ble-plx';
 import { Buffer } from 'buffer';
 import { bleSessionStore } from '../services/BleSessionStore';
@@ -30,7 +31,6 @@ export default function BluetoothCommunication() {
     console.log('BluetoothCommunication mounted with QR code:', qrCode);
   }, [qrCode, router]);
 
-  const rotateAnim = useRef(new Animated.Value(0)).current;
   const [loading, setLoading] = useState(false);
   const [modelLoader, setModelLoader] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
@@ -48,30 +48,7 @@ export default function BluetoothCommunication() {
   const hasNavigatedRef = useRef(false);
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // rotation animation
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(rotateAnim, {
-          toValue: 1,
-          duration: 800,
-          easing: Easing.ease,
-          useNativeDriver: true,
-        }),
-        Animated.timing(rotateAnim, {
-          toValue: 0,
-          duration: 800,
-          easing: Easing.ease,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, [rotateAnim]);
 
-  const flipInterpolate = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['90deg', '210deg'],
-  });
 
   useEffect(() => {
     if (mountedRef.current) return;
@@ -113,20 +90,42 @@ export default function BluetoothCommunication() {
     setScaning(true);
 
     try {
-      console.log('Starting Bluetooth scan for device:', qrCode);
+      console.log('Starting aggressive Bluetooth scan for device:', qrCode);
 
-      // Set scan timeout to 30 seconds
-      scanTimeoutRef.current = setTimeout(() => {
-        if (!deviceFoundRef.current && mountedRef.current) {
-          console.log('Scan timeout - device not found within 30 seconds');
-          bleManager.stopDeviceScan();
-          setLoading(false);
-          setScaning(false);
-          setModelLoader(true);
+      // Try cached session first for instant reconnection
+      const cachedSession = bleSessionStore.getSession(qrCode as string);
+      if (cachedSession && Date.now() - cachedSession.timestamp < 300000) {
+        console.log('Attempting cached device reconnection...');
+        try {
+          const cachedDevice = await bleManager.connectToDevice(cachedSession.deviceId, {
+            timeout: 3000,
+          });
+          if (cachedDevice) {
+            console.log('✅ Instant reconnection successful!');
+            deviceFoundRef.current = true;
+            bleManager.stopDeviceScan();
+            setScaning(false);
+            await handleDeviceConnection(cachedDevice, cachedSession.serviceUUID, cachedSession.txUUID, cachedSession.rxUUID);
+            return;
+          }
+        } catch (cacheError) {
+          console.log('Cached reconnection failed, proceeding with scan');
         }
-      }, 30000);
+      }
 
-      bleManager.startDeviceScan(null, null, async (error, device) => {
+      // Multi-pass scanning strategy
+      let scanAttempt = 0;
+      const maxAttempts = 3;
+      const foundDevices = new Map<string, Device>();
+
+      const attemptScan = () => {
+        scanAttempt++;
+        console.log(`Scan attempt ${scanAttempt}/${maxAttempts}`);
+
+        bleManager.startDeviceScan(
+          null,
+          { allowDuplicates: true, scanMode: 2 },
+          async (error, device) => {
         if (error) {
           console.error('Bluetooth scan error:', error);
           bleManager.stopDeviceScan();
@@ -143,78 +142,55 @@ export default function BluetoothCommunication() {
         }
 
         if (device?.name === (qrCode as string)) {
-          console.log('Device found:', device.name);
-          deviceFoundRef.current = true;
-          if (scanTimeoutRef.current) {
-            clearTimeout(scanTimeoutRef.current);
-            scanTimeoutRef.current = null;
+          if (!foundDevices.has(device.id)) {
+            foundDevices.set(device.id, device);
+            console.log(`✅ Device found (RSSI: ${device.rssi})`);
           }
 
+          // Connect immediately on first strong signal
+          if (!deviceFoundRef.current && device.rssi && device.rssi > -75) {
+            console.log('Strong signal detected, connecting immediately...');
+            deviceFoundRef.current = true;
+            if (scanTimeoutRef.current) {
+              clearTimeout(scanTimeoutRef.current);
+              scanTimeoutRef.current = null;
+            }
+            bleManager.stopDeviceScan();
+            setScaning(false);
+            await handleDeviceConnection(device);
+          }
+        }
+          }
+        );
+      };
+
+      // Start first scan
+      attemptScan();
+
+      // Set timeout for each scan attempt
+      scanTimeoutRef.current = setTimeout(async () => {
+        if (!deviceFoundRef.current && mountedRef.current) {
           bleManager.stopDeviceScan();
-          setScaning(false);
 
-          try {
-            console.log('Connecting to device...');
-            const connectedDevice = await device.connect();
-            connectedDeviceRef.current = connectedDevice;
-            console.log('Device connected, discovering services...');
-
-            // Add disconnection listener to prevent crash
-            connectedDevice.onDisconnected((error, device) => {
-              // Only log if there's an actual error (not manual disconnect)
-              if (error || device?.name) {
-                console.log('Device disconnected:', device?.name, error?.message);
-              }
-              if (monitorSubscriptionRef.current && !hasNavigatedRef.current) {
-                try {
-                  monitorSubscriptionRef.current.remove();
-                  monitorSubscriptionRef.current = null;
-                } catch (e) {
-                  console.log('Error cleaning up on disconnect:', e);
-                }
-              }
-            });
-
-            await connectedDevice.discoverAllServicesAndCharacteristics();
-            await connectedDevice.requestMTU(241);
-            const services = await connectedDevice.services();
-            console.log('Services discovered:', services.length);
-
-            const service = services[2] || services[0];
-            if (!service) {
-              throw new Error('No services found on device');
-            }
-
-            const chars = await connectedDevice.characteristicsForService(service.uuid);
-            const txChar = chars.find((c) => c.isNotifiable || c.isIndicatable);
-            const rxChar = chars.find((c) => c.isWritableWithResponse);
-
-            if (txChar?.uuid && rxChar?.uuid) {
-              console.log('Starting packet communication...');
-
-              // Cache BLE session for faster reconnection
-              bleSessionStore.setSession({
-                deviceId: connectedDevice.id,
-                deviceName: qrCode as string,
-                serviceUUID: service.uuid,
-                rxUUID: rxChar.uuid,
-                txUUID: txChar.uuid,
-                timestamp: Date.now(),
-              });
-
-              startPacket(connectedDevice, service.uuid, txChar.uuid, rxChar.uuid);
-            } else {
-              console.error('Required characteristics not found');
-              setLoading(false);
-              setModelLoader(true);
-            }
-          } catch (connectionError) {
-            console.error('Connection error:', connectionError);
+          if (scanAttempt < maxAttempts) {
+            console.log('Retrying scan...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            attemptScan();
+          } else if (foundDevices.size > 0) {
+            // Connect to any found device even with weak signal
+            console.log('Connecting to device with weak signal...');
+            const device = Array.from(foundDevices.values())[0];
+            deviceFoundRef.current = true;
+            setScaning(false);
+            await handleDeviceConnection(device);
+          } else {
+            console.log('Device not found after all attempts');
             setLoading(false);
+            setScaning(false);
             setModelLoader(true);
           }
         }
-      });
+      }, 10000);
     } catch (e) {
       console.error('Scan initialization error:', e);
       setLoading(false);
@@ -222,6 +198,75 @@ export default function BluetoothCommunication() {
       if (!deviceFoundRef.current) {
         setModelLoader(true);
       }
+    }
+  }
+
+  async function handleDeviceConnection(device: Device, cachedServiceUUID?: string, cachedTxUUID?: string, cachedRxUUID?: string) {
+    try {
+      console.log('Connecting to device...');
+      const connectedDevice = await device.connect({ timeout: 5000 });
+      connectedDeviceRef.current = connectedDevice;
+      console.log('Device connected, discovering services...');
+
+      connectedDevice.onDisconnected((error, device) => {
+        if (error || device?.name) {
+          console.log('Device disconnected:', device?.name, error?.message);
+        }
+        if (monitorSubscriptionRef.current && !hasNavigatedRef.current) {
+          try {
+            monitorSubscriptionRef.current.remove();
+            monitorSubscriptionRef.current = null;
+          } catch (e) {
+            console.log('Error cleaning up on disconnect:', e);
+          }
+        }
+      });
+
+      await connectedDevice.discoverAllServicesAndCharacteristics();
+      await connectedDevice.requestMTU(241);
+      
+      let service, txChar, rxChar;
+
+      if (cachedServiceUUID && cachedTxUUID && cachedRxUUID) {
+        // Use cached UUIDs for faster setup
+        console.log('Using cached service UUIDs');
+        service = { uuid: cachedServiceUUID };
+        txChar = { uuid: cachedTxUUID };
+        rxChar = { uuid: cachedRxUUID };
+      } else {
+        const services = await connectedDevice.services();
+        console.log('Services discovered:', services.length);
+        service = services[2] || services[0];
+        if (!service) {
+          throw new Error('No services found on device');
+        }
+        const chars = await connectedDevice.characteristicsForService(service.uuid);
+        txChar = chars.find((c) => c.isNotifiable || c.isIndicatable);
+        rxChar = chars.find((c) => c.isWritableWithResponse);
+      }
+
+      if (txChar?.uuid && rxChar?.uuid) {
+        console.log('Starting packet communication...');
+
+        bleSessionStore.setSession({
+          deviceId: connectedDevice.id,
+          deviceName: qrCode as string,
+          serviceUUID: service.uuid,
+          rxUUID: rxChar.uuid,
+          txUUID: txChar.uuid,
+          timestamp: Date.now(),
+        });
+
+        startPacket(connectedDevice, service.uuid, txChar.uuid, rxChar.uuid);
+      } else {
+        console.error('Required characteristics not found');
+        setLoading(false);
+        setModelLoader(true);
+      }
+    } catch (connectionError) {
+      console.error('Connection error:', connectionError);
+      setLoading(false);
+      setModelLoader(true);
     }
   }
 
@@ -619,24 +664,11 @@ export default function BluetoothCommunication() {
       </View>
       
       <View className="flex-1 items-center justify-center">
-        <View className="items-center">
-          <Image
-            source={require('../assets/images/device.jpg')}
-            style={{ width: 180, height: 180 }}
-            contentFit="contain"
-          />
-          <Animated.View style={{ transform: [{ rotate: flipInterpolate }] }}>
-            <Image
-              source={require('../assets/images/transfer.png')}
-              style={{ width: 60, height: 60 }}
-              contentFit="contain"
-            />
-          </Animated.View>
-          <Image
-            source={require('../assets/images/sensor.png')}
-            style={{ width: 180, height: 180, marginTop: 20, marginLeft: 20 }}
-            contentFit="contain"
-          />
+        <View className="relative items-center justify-center">
+          <ActivityIndicator size={120} color="#1976D2" />
+          <View className="absolute items-center justify-center">
+            <MaterialCommunityIcons name="bluetooth" size={60} color="#1976D2" />
+          </View>
         </View>
       </View>
       <LoaderModal visible={loading} />

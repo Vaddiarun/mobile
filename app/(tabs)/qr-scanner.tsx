@@ -34,9 +34,9 @@ export default function QRScanner() {
       setCameraActive(true);
       setRetryCount(0);
 
-      // Failsafe: restart camera after 2 seconds if it doesn't activate
+      // Failsafe: restart camera after 2 seconds if device is not available
       const failsafeTimer = setTimeout(() => {
-        if (!isScanning) {
+        if (!device) {
           console.log('Camera failsafe: restarting camera');
           setCameraActive(false);
           setTimeout(() => setCameraActive(true), 100);
@@ -47,7 +47,7 @@ export default function QRScanner() {
         clearTimeout(failsafeTimer);
         setIsScanning(false);
       };
-    }, [])
+    }, [device])
   );
 
   // Request camera + BLE + location permissions

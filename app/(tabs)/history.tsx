@@ -21,7 +21,7 @@ type TripRow = {
   deviceId: string;
   timestamp: string;
   rawTimestamp: number;
-  status: 'Started' | 'Stopped';
+  status: 'Initiated' | 'Completed';
 };
 
 export default function History() {
@@ -48,9 +48,7 @@ export default function History() {
   const [showAllPages, setShowAllPages] = useState(false);
   const RECORDS_PER_PAGE = 10;
 
-  const loadAllTrips = async (from: string, to: string) => {
-    if (loading) return;
-
+  const loadAllTrips = useCallback(async (from: string, to: string) => {
     setLoading(true);
     try {
       let allTrips: any[] = [];
@@ -59,7 +57,7 @@ export default function History() {
 
       do {
         const result = await getTripHistory(from, to, page, 50);
-        
+
         if (result.success && result.data) {
           if (result.data.trips) {
             allTrips = [...allTrips, ...result.data.trips];
@@ -87,19 +85,17 @@ export default function History() {
             deviceId: String(trip.deviceid || '—'),
             timestamp: formatDate(rawTime),
             rawTimestamp: rawTime,
-            status: isCompleted ? 'Stopped' : 'Started',
+            status: isCompleted ? 'Completed' : 'Initiated',
           };
         });
 
       setAllData(formatted);
     } catch (error) {
-      setAllData([]);
+      console.error('Error loading trips:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-
+  }, []);
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -132,7 +128,7 @@ export default function History() {
       const to = today.toISOString().split('T')[0];
 
       loadAllTrips(from, to);
-    }, [tab])
+    }, [tab, loadAllTrips])
   );
 
   const todayPrefix = useMemo(
@@ -185,15 +181,17 @@ export default function History() {
           />
         </View>
       )}
-      <Text className="flex-[1.5] text-[15px] font-semibold text-black">{item.deviceId}</Text>
-      <Text className="flex-[1.8] text-left text-[12px] text-gray-600">{item.timestamp}</Text>
-      <View className="flex-[0.7] flex-row items-center justify-start">
+      <Text className="flex-[1.3] text-[15px] font-semibold text-black">{item.deviceId}</Text>
+      <Text className="flex-[1.7] text-left text-[12px] text-gray-600">{item.timestamp}</Text>
+      <View className="flex-[1] flex-row items-center justify-start">
         <View
-          className={`mr-2 h-2.5 w-2.5 rounded-full ${
-            item.status === 'Started' ? 'bg-green-500' : 'bg-red-500'
+          className={`mr-1.5 h-2.5 w-2.5 rounded-full ${
+            item.status === 'Initiated' ? 'bg-green-500' : 'bg-red-500'
           }`}
         />
-        <Text className="text-[12px] text-gray-700">{item.status}</Text>
+        <Text className="text-[12px] text-gray-700" numberOfLines={1}>
+          {item.status}
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -245,8 +243,8 @@ export default function History() {
           )} */}
           <View className="h-9 w-9" />
           <View className="items-center">
-            <Text className="text-lg font-extrabold text-black">Device History</Text>
-            <Text className="text-xs text-gray-400">click on trip to view details</Text>
+            <Text className="text-2xl font-semibold text-black">Device History</Text>
+            <Text className="text-md text-gray-400">click on trip to view details</Text>
           </View>
           <View className="h-9 w-9" />
         </View>
@@ -287,10 +285,10 @@ export default function History() {
         {/* Table container */}
         <View className="mb-14 flex-1 rounded-[30px] bg-[#e6e6e6] p-2">
           {/* Header row */}
-          <View className="mx-auto mt-2 w-[90%] flex-row">
-            <Text className="flex-[1.5] text-[14px] font-bold text-black">Device ID</Text>
-            <Text className="flex-[1.8] text-[14px] font-bold text-black">Timestamp</Text>
-            <Text className="flex-[0.7] text-[14px] font-bold text-black">Status</Text>
+          <View className="mx-auto mt-2 w-[95%] flex-row">
+            <Text className="flex-[1.3] text-[14px] font-bold text-black">Device ID</Text>
+            <Text className="flex-[1.7] text-[14px] font-bold text-black">Timestamp</Text>
+            <Text className="flex-[1] text-[14px] font-bold text-black">Trip Status</Text>
           </View>
 
           {/* List */}
@@ -299,21 +297,15 @@ export default function History() {
             keyExtractor={(it) => it.id}
             renderItem={renderItem}
             contentContainerStyle={{ paddingBottom: 50, width: '95%', alignSelf: 'center' }}
-
             ListEmptyComponent={
               loading ? (
                 <ActivityIndicator size="large" color="#1976D2" className="mt-10" />
               ) : (
-                <Text className="mt-5 text-center text-sm text-gray-600">No trips found.</Text>
+                <Text className="mt-20 text-center text-3xl text-gray-400">No trips found</Text>
               )
             }
-            ListFooterComponent={
-              loading && allData.length > 0 ? (
-                <ActivityIndicator size="small" color="#1976D2" className="my-4" />
-              ) : null
-            }
           />
-          
+
           {totalPages > 1 && (
             <View className="pb-4">
               <View className="flex-row items-center justify-between">
@@ -326,25 +318,29 @@ export default function History() {
                     <Text className={currentPage === 1 ? 'text-gray-500' : 'text-white'}>«</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    onPress={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    onPress={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
                     className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === 1 ? 'bg-gray-300' : 'bg-blue-600'}`}>
                     <Text className={currentPage === 1 ? 'text-gray-500' : 'text-white'}>‹</Text>
                   </TouchableOpacity>
                   <View className="h-9 w-12 items-center justify-center rounded-full bg-blue-600">
-                    <Text className="text-white font-semibold">{currentPage}</Text>
+                    <Text className="font-semibold text-white">{currentPage}</Text>
                   </View>
                   <TouchableOpacity
-                    onPress={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    onPress={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
                     className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === totalPages ? 'bg-gray-300' : 'bg-blue-600'}`}>
-                    <Text className={currentPage === totalPages ? 'text-gray-500' : 'text-white'}>›</Text>
+                    <Text className={currentPage === totalPages ? 'text-gray-500' : 'text-white'}>
+                      ›
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => setCurrentPage(totalPages)}
                     disabled={currentPage === totalPages}
                     className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === totalPages ? 'bg-gray-300' : 'bg-blue-600'}`}>
-                    <Text className={currentPage === totalPages ? 'text-gray-500' : 'text-white'}>»</Text>
+                    <Text className={currentPage === totalPages ? 'text-gray-500' : 'text-white'}>
+                      »
+                    </Text>
                   </TouchableOpacity>
                 </View>
                 <View className="flex-1 items-end">
@@ -357,7 +353,7 @@ export default function History() {
               </View>
               {showAllPages && (
                 <View className="mt-3 flex-row flex-wrap justify-center gap-2">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <TouchableOpacity
                       key={page}
                       onPress={() => {
@@ -365,7 +361,14 @@ export default function History() {
                         setShowAllPages(false);
                       }}
                       className={`h-8 w-8 items-center justify-center rounded-full ${currentPage === page ? 'bg-blue-600' : 'bg-gray-200'}`}>
-                      <Text className={currentPage === page ? 'text-white font-semibold text-xs' : 'text-gray-700 text-xs'}>{page}</Text>
+                      <Text
+                        className={
+                          currentPage === page
+                            ? 'text-xs font-semibold text-white'
+                            : 'text-xs text-gray-700'
+                        }>
+                        {page}
+                      </Text>
                     </TouchableOpacity>
                   ))}
                 </View>

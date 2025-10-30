@@ -35,6 +35,7 @@ export default function TripDetail() {
   const { tripName } = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
   const [apiTrip, setApiTrip] = useState<any>(null);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
   const chartRef = useRef(null);
 
   useEffect(() => {
@@ -111,8 +112,7 @@ export default function TripDetail() {
 
   const getValueColor = (value: number, min: number, max: number) => {
     if (value < min || value > max) return '#EF4444'; // Red for exceeding
-    if (value === min || value === max) return '#F59E0B'; // Yellow for at limit
-    return '#10B981'; // Green for normal
+    return '#000000'; // Black for normal
   };
 
   const formatTimestamp = (unixTime: number) => {
@@ -128,6 +128,7 @@ export default function TripDetail() {
   };
 
   const generatePDF = async () => {
+    setGeneratingPDF(true);
     try {
       // Generate SVG chart for PDF
       let chartSvg = '';
@@ -135,21 +136,22 @@ export default function TripDetail() {
         if (packets.length > 0) {
           const tempData = packets.map((p) => p.temperature);
           const humData = packets.map((p) => p.humidity);
-          const allValues = [...tempData, ...humData];
-
-          // Include thresholds in range calculation to ensure limit lines are visible
+          
+          const tempValues = [...tempData];
           if (thresholds) {
-            allValues.push(
-              thresholds.tempMin,
-              thresholds.tempMax,
-              thresholds.humMin,
-              thresholds.humMax
-            );
+            tempValues.push(thresholds.tempMin, thresholds.tempMax);
           }
+          const tempMin = Math.min(...tempValues) - 5;
+          const tempMax = Math.max(...tempValues) + 5;
+          const tempRange = tempMax - tempMin;
 
-          const dataMin = Math.min(...allValues) - 10;
-          const dataMax = Math.max(...allValues) + 10;
-          const range = dataMax - dataMin;
+          const humValues = [...humData];
+          if (thresholds) {
+            humValues.push(thresholds.humMin, thresholds.humMax);
+          }
+          const humMin = Math.min(...humValues) - 5;
+          const humMax = Math.max(...humValues) + 5;
+          const humRange = humMax - humMin;
 
           const svgWidth = 600;
           const svgHeight = 400;
@@ -158,11 +160,11 @@ export default function TripDetail() {
           const chartHeight = svgHeight - 2 * padding - 60;
 
           const getX = (index) => padding + (index / (packets.length - 1)) * chartWidth;
-          const getY = (value) => padding + ((dataMax - value) / range) * chartHeight;
+          const getTempY = (value) => padding + ((tempMax - value) / tempRange) * chartHeight;
+          const getHumY = (value) => padding + ((humMax - value) / humRange) * chartHeight;
 
           const getColor = (value, min, max, isTemp) => {
             if (value < min || value > max) return isTemp ? '#EF4444' : '#F97316';
-            if (value === min || value === max) return '#F59E0B';
             return isTemp ? '#3B82F6' : '#22C55E';
           };
 
@@ -170,6 +172,7 @@ export default function TripDetail() {
             const segments = [];
             const min = thresholds ? (isTemp ? thresholds.tempMin : thresholds.humMin) : -Infinity;
             const max = thresholds ? (isTemp ? thresholds.tempMax : thresholds.humMax) : Infinity;
+            const getY = isTemp ? getTempY : getHumY;
 
             for (let i = 0; i < data.length - 1; i++) {
               const x1 = getX(i);
@@ -222,30 +225,25 @@ export default function TripDetail() {
           const tempSegments = createSegments(tempData, true);
           const humSegments = createSegments(humData, false);
 
-          // Generate limit lines
-          let limitLines = '';
-          if (thresholds) {
-            const tempMinY = padding + ((dataMax - thresholds.tempMin) / range) * chartHeight;
-            const tempMaxY = padding + ((dataMax - thresholds.tempMax) / range) * chartHeight;
-            const humMinY = padding + ((dataMax - thresholds.humMin) / range) * chartHeight;
-            const humMaxY = padding + ((dataMax - thresholds.humMax) / range) * chartHeight;
-
-            limitLines = `
-              <line x1="${padding}" y1="${tempMinY}" x2="${padding + chartWidth}" y2="${tempMinY}" stroke="#EF4444" stroke-width="1" stroke-dasharray="5,5"/>
-              <line x1="${padding}" y1="${tempMaxY}" x2="${padding + chartWidth}" y2="${tempMaxY}" stroke="#EF4444" stroke-width="1" stroke-dasharray="5,5"/>
-              <line x1="${padding}" y1="${humMinY}" x2="${padding + chartWidth}" y2="${humMinY}" stroke="#F97316" stroke-width="1" stroke-dasharray="5,5"/>
-              <line x1="${padding}" y1="${humMaxY}" x2="${padding + chartWidth}" y2="${humMaxY}" stroke="#F97316" stroke-width="1" stroke-dasharray="5,5"/>
-            `;
+          // Left Y-axis markings (Temperature)
+          const tempAxisMarks = [];
+          for (let i = 0; i <= 4; i++) {
+            const value = tempMax - (tempRange * i) / 4;
+            const y = padding + (i / 4) * chartHeight;
+            tempAxisMarks.push(`
+              <line x1="${padding - 5}" y1="${y}" x2="${padding}" y2="${y}" stroke="#000" stroke-width="1"/>
+              <text x="${padding - 10}" y="${y + 4}" font-size="10" fill="#000" text-anchor="end">${Math.round(value)}</text>
+            `);
           }
 
-          // Y-axis markings
-          const yAxisMarks = [];
+          // Right Y-axis markings (Humidity)
+          const humAxisMarks = [];
           for (let i = 0; i <= 4; i++) {
-            const value = dataMax - (range * i) / 4;
+            const value = humMax - (humRange * i) / 4;
             const y = padding + (i / 4) * chartHeight;
-            yAxisMarks.push(`
-              <line x1="${padding - 5}" y1="${y}" x2="${padding}" y2="${y}" stroke="#666" stroke-width="1"/>
-              <text x="${padding - 10}" y="${y + 4}" font-size="10" fill="#666" text-anchor="end">${Math.round(value)}</text>
+            humAxisMarks.push(`
+              <line x1="${padding + chartWidth}" y1="${y}" x2="${padding + chartWidth + 5}" y2="${y}" stroke="#000" stroke-width="1"/>
+              <text x="${padding + chartWidth + 10}" y="${y + 4}" font-size="10" fill="#000" text-anchor="start">${Math.round(value)}</text>
             `);
           }
 
@@ -269,24 +267,23 @@ export default function TripDetail() {
             <svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">
               <rect width="100%" height="100%" fill="white" stroke="#ddd" stroke-width="1" rx="8"/>
               
-              <!-- Y-axis -->
-              <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${padding + chartHeight}" stroke="#666" stroke-width="1"/>
-              ${yAxisMarks.join('')}
+              <!-- Left Y-axis (Temperature) -->
+              <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${padding + chartHeight}" stroke="#000" stroke-width="1"/>
+              <text x="${padding - 25}" y="${padding - 5}" font-size="11" fill="#000" font-weight="bold" text-anchor="middle">°C</text>
+              ${tempAxisMarks.join('')}
+              
+              <!-- Right Y-axis (Humidity) -->
+              <line x1="${padding + chartWidth}" y1="${padding}" x2="${padding + chartWidth}" y2="${padding + chartHeight}" stroke="#000" stroke-width="1"/>
+              <text x="${padding + chartWidth + 25}" y="${padding - 5}" font-size="11" fill="#000" font-weight="bold" text-anchor="middle">%RH</text>
+              ${humAxisMarks.join('')}
               
               <!-- X-axis -->
               <line x1="${padding}" y1="${padding + chartHeight}" x2="${padding + chartWidth}" y2="${padding + chartHeight}" stroke="#666" stroke-width="1"/>
               ${xAxisMarks.join('')}
               
-              <!-- Limit lines -->
-              ${limitLines}
-              
               <!-- Data lines -->
               ${tempSegments}
               ${humSegments}
-              
-              <!-- Y-axis labels -->
-              <text x="15" y="25" font-size="12" fill="#666" font-weight="bold">°C</text>
-              <text x="15" y="40" font-size="12" fill="#666" font-weight="bold">%RH</text>
               
               <!-- Legend -->
               <rect x="${padding}" y="${svgHeight - 50}" width="${chartWidth}" height="40" fill="#f9f9f9" stroke="#ddd" rx="4"/>
@@ -310,17 +307,13 @@ export default function TripDetail() {
           const tempColor = thresholds
             ? p.temperature < thresholds.tempMin || p.temperature > thresholds.tempMax
               ? '#EF4444'
-              : p.temperature === thresholds.tempMin || p.temperature === thresholds.tempMax
-                ? '#F59E0B'
-                : '#10B981'
-            : '#10B981';
+              : '#000000'
+            : '#000000';
           const humColor = thresholds
             ? p.humidity < thresholds.humMin || p.humidity > thresholds.humMax
               ? '#EF4444'
-              : p.humidity === thresholds.humMin || p.humidity === thresholds.humMax
-                ? '#F59E0B'
-                : '#10B981'
-            : '#10B981';
+              : '#000000'
+            : '#000000';
           return `
           <tr>
             <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${i + 1}</td>
@@ -394,6 +387,8 @@ export default function TripDetail() {
       await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
     } catch (error) {
       Alert.alert('Error', 'Failed to generate PDF');
+    } finally {
+      setGeneratingPDF(false);
     }
   };
 
@@ -460,6 +455,11 @@ export default function TripDetail() {
           </View>
         )}
 
+        <View className="mt-1 flex-row items-center">
+          <MaterialCommunityIcons name="alarm" size={16} color="#666" />
+          <Text className="ml-1 text-sm text-gray-600">Sampling Interval: 60 seconds</Text>
+        </View>
+
         {packets.length > 0 && (
           <>
             <View className="mt-1 flex-row items-center">
@@ -512,8 +512,8 @@ export default function TripDetail() {
           <>
             <View className="mb-4">
               <View className="mb-2 flex-row justify-start">
-                <Text className="mr-4 text-xs font-semibold text-gray-700">°C</Text>
-                <Text className="text-xs font-semibold text-gray-700">%RH</Text>
+                {/* <Text className="mr-4 text-xs font-semibold text-gray-700">°C</Text> */}
+                {/* <Text className="text-xs font-semibold text-gray-700">%RH</Text> */}
               </View>
 
               <View ref={chartRef} collapsable={false} className="rounded-2xl bg-white p-2">
@@ -521,7 +521,7 @@ export default function TripDetail() {
                   packets={packets}
                   thresholds={thresholds}
                   width={Dimensions.get('window').width - 32}
-                  height={220}
+                  height={300}
                 />
               </View>
 
@@ -561,7 +561,9 @@ export default function TripDetail() {
                 <TouchableOpacity
                   onPress={() => {
                     const url = `https://www.google.com/maps/dir/?api=1&origin=${trip.startLocation.latitude},${trip.startLocation.longitude}&destination=${trip.endLocation.latitude},${trip.endLocation.longitude}`;
-                    Linking.openURL(url).catch(() => Alert.alert('Error', 'Unable to open Google Maps'));
+                    Linking.openURL(url).catch(() =>
+                      Alert.alert('Error', 'Unable to open Google Maps')
+                    );
                   }}
                   className="flex-row items-center rounded-lg border-2 border-blue-600 px-4 py-3">
                   <MaterialCommunityIcons name="map-marker-path" size={20} color="#1976D2" />
@@ -572,10 +574,17 @@ export default function TripDetail() {
               )}
               <TouchableOpacity
                 onPress={generatePDF}
-                className="flex-row items-center rounded-lg border-2 border-blue-600 px-4 py-3">
-                <MaterialCommunityIcons name="download" size={20} color="#1976D2" />
-                <Text className="ml-2 text-base font-semibold text-blue-600" numberOfLines={1}>
-                  PDF
+                disabled={generatingPDF}
+                className={`flex-row items-center rounded-lg border-2 px-4 py-3 ${generatingPDF ? 'border-gray-400 bg-gray-100' : 'border-blue-600'}`}>
+                {generatingPDF ? (
+                  <ActivityIndicator size="small" color="#666" />
+                ) : (
+                  <MaterialCommunityIcons name="download" size={20} color="#1976D2" />
+                )}
+                <Text
+                  className={`ml-2 text-base font-semibold ${generatingPDF ? 'text-gray-500' : 'text-blue-600'}`}
+                  numberOfLines={1}>
+                  {generatingPDF ? 'Loading...' : 'PDF'}
                 </Text>
               </TouchableOpacity>
             </View>
