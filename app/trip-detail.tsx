@@ -129,6 +129,10 @@ export default function TripDetail() {
 
   const generatePDF = async () => {
     setGeneratingPDF(true);
+    
+    // Allow UI to update before starting heavy PDF generation
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     try {
       // Generate SVG chart for PDF
       let chartSvg = '';
@@ -136,7 +140,7 @@ export default function TripDetail() {
         if (packets.length > 0) {
           const tempData = packets.map((p) => p.temperature);
           const humData = packets.map((p) => p.humidity);
-          
+
           const tempValues = [...tempData];
           if (thresholds) {
             tempValues.push(thresholds.tempMin, thresholds.tempMax);
@@ -521,7 +525,7 @@ export default function TripDetail() {
                   packets={packets}
                   thresholds={thresholds}
                   width={Dimensions.get('window').width - 32}
-                  height={300}
+                  height={220}
                 />
               </View>
 
@@ -533,7 +537,7 @@ export default function TripDetail() {
                   </View>
                   <View className="flex-1 flex-row items-center">
                     <View className="mr-2 h-3 w-8 bg-red-500" />
-                    <Text className="text-xs text-gray-600">Temp Limits</Text>
+                    <Text className="text-xs text-gray-600">Temp Breach</Text>
                   </View>
                 </View>
                 <View className="w-full flex-row justify-between px-8">
@@ -543,7 +547,7 @@ export default function TripDetail() {
                   </View>
                   <View className="flex-1 flex-row items-center">
                     <View className="mr-2 h-3 w-8 bg-orange-500" />
-                    <Text className="text-xs text-gray-600">Humid Limits</Text>
+                    <Text className="text-xs text-gray-600">Humid Breach</Text>
                   </View>
                 </View>
               </View>

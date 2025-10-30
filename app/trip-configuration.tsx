@@ -405,10 +405,10 @@ export default function TripConfiguration() {
     if (!tripName) e.tripName = 'Trip name is required';
 
     if (customizeBox) {
-      if (tempMin > tempMax) e.temp = 'Temperature min cannot be greater than max';
-      if (humMin > humMax) e.humidity = 'Humidity min cannot be greater than max';
-      else if (humMin < 0 || humMin > 100) e.humidity = 'Humidity must be between 0 and 100';
+      if (tempMin >= tempMax) e.temp = 'Min temperature must be less than max temperature';
+      if (humMin < 0 || humMin > 100) e.humidity = 'Humidity must be between 0 and 100';
       else if (humMax < 0 || humMax > 100) e.humidity = 'Humidity must be between 0 and 100';
+      else if (humMin >= humMax) e.humidity = 'Min humidity must be less than max humidity';
     }
 
     setErrors(e);
