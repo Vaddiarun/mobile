@@ -132,6 +132,7 @@ This document provides a comprehensive overview of what each file contributes to
 ### Documentation & Fixes 
 - **IMPORTANT: `TRIP_START_FLOW_ANALYSIS.md`** - Complete Bluetooth protocol flow analysis from QR scan to trip start/stop with packet structures and timing
 - **`FILE_DOCUMENTATION.md`** - This file - comprehensive project structure documentation
+- **`BLE_SCANNING_ALGORITHM.md`** - This file explains bluetooth connection algorithm in detail. (how it scans and connects to device)
 [IGNORE BELOW, THEY ARE OLD]
 - **`README_BUILD.md`** - Build process documentation
 - **`EMERGENCY_FIX.md`** - Emergency fixes and workarounds for build issues
