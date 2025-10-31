@@ -192,7 +192,7 @@ export default function Home() {
 
         {/* Trip summary */}
         <View className="mb-5 mt-3 rounded-xl bg-gray-100 p-4 py-10">
-          <Text className="mb-3 text-2xl font-bold text-black">Today’s Trip Overview</Text>
+          <Text className="mb-3 text-2xl font-bold text-black">Today’s Trips Overview</Text>
           <View className="flex-row justify-between">
             <View className="flex-1 items-start">
               <Text className="mb-2 text-xl font-semibold text-neutral-900">Initiated</Text>

@@ -624,10 +624,15 @@ export default function TripDetail() {
               {trip.startLocation && trip.endLocation && (
                 <TouchableOpacity
                   onPress={() => {
-                    const url = `https://www.google.com/maps/dir/?api=1&origin=${trip.startLocation.latitude},${trip.startLocation.longitude}&destination=${trip.endLocation.latitude},${trip.endLocation.longitude}`;
-                    Linking.openURL(url).catch(() =>
-                      Alert.alert('Error', 'Unable to open Google Maps')
-                    );
+                    router.push({
+                      pathname: '/trip-map',
+                      params: {
+                        startLat: trip.startLocation.latitude,
+                        startLng: trip.startLocation.longitude,
+                        endLat: trip.endLocation.latitude,
+                        endLng: trip.endLocation.longitude,
+                      },
+                    });
                   }}
                   className="flex-row items-center rounded-lg border-2 border-blue-600 px-4 py-3">
                   <MaterialCommunityIcons name="map-marker-path" size={20} color="#1976D2" />

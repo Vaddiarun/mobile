@@ -23,6 +23,7 @@ export default function RootLayout() {
         <Stack.Screen name="trip-configuration" options={{ headerShown: false }} />
         <Stack.Screen name="trip-detail" options={{ headerShown: false }} />
         <Stack.Screen name="trip-records" options={{ headerShown: false }} />
+        <Stack.Screen name="trip-map" options={{ headerShown: false }} />
         <Stack.Screen
           name="bluetooth-communication"
           options={{ title: 'Mobile to Sensor', headerShown: false }}

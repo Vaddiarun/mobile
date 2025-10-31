@@ -56,6 +56,11 @@
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="NEVER"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
 
+    <!-- Google Maps API Key -->
+    <meta-data
+        android:name="com.google.android.geo.API_KEY"
+        android:value="AIzaSyDsqWho-EyUaPIe2Sxp8X2tw4x7SCLOW-A"/>
+
     <activity
         android:name=".MainActivity"
         android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode"
