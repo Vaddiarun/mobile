@@ -28,6 +28,7 @@
     "expo-sharing": "~14.0.7",
     "expo-status-bar": "~3.0.8",
     "expo-system-ui": "^6.0.7",
+    "force": "^0.0.3",
     "metro-react-native-babel-transformer": "^0.77.0",
     "nativewind": "^4.2.1",
     "react": "19.1.0",
