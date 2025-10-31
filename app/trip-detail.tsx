@@ -292,7 +292,7 @@ export default function TripDetail() {
 
     const size = '690x180'; // compact to keep map on Page 1
     const markers: string[] = [];
-    if (start) markers.push(`markers=color:green|${start.latitude},${start.longitude}`);
+    if (start) markers.push(`markers=color:blue|${start.latitude},${start.longitude}`);
     if (end) markers.push(`markers=color:red|${end.latitude},${end.longitude}`);
 
     const base = `https://maps.googleapis.com/maps/api/staticmap?scale=2&format=png&size=${size}&maptype=roadmap`;

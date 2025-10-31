@@ -1,13 +1,9 @@
 import apiClient from "../apiClient";
 import { EndPoints } from "../endPoints";
-import { getUser, saveData, getData } from "../../mmkv-storage/storage";
+import { getUser } from "../../mmkv-storage/storage";
 
 export const getTripHistory = async (from: string, to: string, page: number = 1, limit: number = 5) => {
   try {
-    const cacheKey = `trip_history_${from}_${to}_${page}_${limit}`;
-    const cached = getData(cacheKey);
-    if (cached) return { success: true, data: cached };
-
     const user = getUser();
     const token = user?.data?.token;
 
@@ -27,7 +23,6 @@ export const getTripHistory = async (from: string, to: string, page: number = 1,
       },
     });
 
-    saveData(cacheKey, response.data?.data);
     return { success: true, data: response.data?.data };
   } catch (error: any) {
     return { success: false, error: error.response?.data?.message || error.message || error };
@@ -57,10 +52,6 @@ export const getHomeStatus = async (from: number = 0, to: number = 0) => {
 
 export const getTripDetails = async (tripName: string) => {
   try {
-    const cacheKey = `trip_details_${tripName}`;
-    const cached = getData(cacheKey);
-    if (cached) return { success: true, data: cached };
-
     const user = getUser();
     const token = user?.data?.token;
 
@@ -74,7 +65,6 @@ export const getTripDetails = async (tripName: string) => {
       },
     });
 
-    saveData(cacheKey, response.data?.data);
     return { success: true, data: response.data?.data };
   } catch (error: any) {
     return { success: false, error: error.response?.data?.message || error.message || error };
