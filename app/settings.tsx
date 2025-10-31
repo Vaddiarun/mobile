@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { getUser, clearUser } from '../mmkv-storage/storage';
 import CustomModal from '../components/CustomModal';
+import { deleteUser } from '../services/RestApiServices/AuthenticateService';
 
 export default function Settings() {
   const router = useRouter();
@@ -20,10 +21,23 @@ export default function Settings() {
     setShowLogoutModal(true);
   };
 
-  const confirmLogout = () => {
-    clearUser();
-    router.replace('/splash');
-    setShowLogoutModal(false);
+  const confirmLogout = async () => {
+    try {
+      const body = {
+        username: user?.data?.user?.Username || '',
+        phone: user?.data?.user?.Phone || '',
+        email: user?.data?.user?.Email || ''
+      };
+      
+      await deleteUser(body);
+      clearUser();
+      router.replace('/splash');
+    } catch (error) {
+      clearUser();
+      router.replace('/splash');
+    } finally {
+      setShowLogoutModal(false);
+    }
   };
 
   const formatDate = (timestamp: number | string): string => {

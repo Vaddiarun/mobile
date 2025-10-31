@@ -19,3 +19,12 @@ export const verifyOtp = async (body: any) => {
     return { success: false, error: error };
   }
 };
+
+export const deleteUser = async (body: any) => {
+  try {
+    const response = await apiClient.delete(EndPoints.DELETE_USER, { data: body });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.message || error };
+  }
+};

@@ -6,5 +6,6 @@ export const EndPoints = {
   STOP_TRIP: "uploadTripData",
   GET_TRIP_HISTORY: "get-trip-details-by-user",
   GET_HOME_STATUS: "get-started-completed-trip-status",
-  GET_TRIP_DETAILS: "get-trip-details-by-tripname"
+  GET_TRIP_DETAILS: "get-trip-details-by-tripname",
+  DELETE_USER: "logout"
 };
