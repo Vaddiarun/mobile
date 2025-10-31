@@ -331,13 +331,13 @@ export default function TripDetail() {
   /** INLINE SVG FALLBACK (height 180) */
   function buildInlineMiniMap(_points: { lat: number; lng: number }[], start?: any, end?: any) {
     if (!start || !end) {
-      return `<div style="height:180px;display:flex;align-items:center;justify-content:center;color:#6b7280;border:1px solid #e5e7eb;border-radius:10px">Path preview unavailable</div>`;
+      return `<div style="height:320px;display:flex;align-items:center;justify-content:center;color:#6b7280;border:1px solid #e5e7eb;border-radius:10px">Path preview unavailable</div>`;
     }
 
     const s = start,
       e = end;
-    const W = 690,
-      H = 180,
+    const W = 800,
+      H = 300,
       PAD = 12;
 
     let minLat = Math.min(s.latitude, e.latitude);
@@ -384,8 +384,22 @@ export default function TripDetail() {
         <rect x="0" y="0" width="${W}" height="${H}" fill="url(#bgGrad)"/>
         ${verticalLines}
         ${horizontalLines}
-        <path d="M ${x1} ${y1} L ${x2} ${y2}" fill="none" stroke="#2563eb" stroke-width="3" stroke-dasharray="8 6"/>
-        <circle cx="${x1}" cy="${y1}" r="4" fill="#16a34a"/>
+       <!-- Curved dotted path (arc) -->
+<path 
+  d="
+    M ${x1} ${y1}
+    Q ${(parseFloat(x1) + parseFloat(x2)) / 2} ${(Math.min(parseFloat(y1), parseFloat(y2)) / 2 - 60).toFixed(1)}
+      ${x2} ${y2}
+  "
+  fill="none"
+  stroke="#1E3A8A"
+  stroke-width="3"
+  stroke-dasharray="8 6"
+  stroke-linecap="round"
+/>
+
+
+        <circle cx="${x1}" cy="${y1}" r="4" fill="#428af5"/>
         <circle cx="${x2}" cy="${y2}" r="4" fill="#ef4444"/>
       </svg>
     `;
@@ -424,38 +438,46 @@ export default function TripDetail() {
       if (url) {
         const dataURL = await toDataURL(url);
         mapBlock = dataURL
-          ? `<img src="${dataURL}" alt="map" style="width:100%;height:180px;border-radius:10px;border:1px solid #e5e7eb;object-fit:cover"/>`
+          ? `<img src="${dataURL}" alt="map" style="width:100%;height:320px;border-radius:10px;border:1px solid #e5e7eb;object-fit:cover"/>`
           : buildInlineMiniMap(latlngs, trip?.startLocation, trip?.endLocation);
       } else {
         mapBlock = buildInlineMiniMap(latlngs, trip?.startLocation, trip?.endLocation);
       }
 
       // Pagination helpers
-      const ROWS_PER_TABLE_PAGE = 18;
+      const PAGE2_ROWS = 21;
+      const OTHER_ROWS = 32;
+
       const chunk = <T,>(arr: T[], size: number): T[][] => {
         const out: T[][] = [];
         for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
         return out;
       };
 
-      const tableChunks = chunk(packets, ROWS_PER_TABLE_PAGE);
-      const extraChunks = tableChunks.slice(1);
-      const totalPages = 2 + Math.max(0, tableChunks.length - 1);
+      // Page 2 slice (first 21)
+      const page2Data = packets.slice(0, PAGE2_ROWS);
+
+      // Remaining pages (groups of 32)
+      const otherData = packets.slice(PAGE2_ROWS);
+      const extraChunks = chunk(otherData, OTHER_ROWS);
+
+      const totalPages = 2 + extraChunks.length;
 
       const renderTableRows = (rows: DataPacket[], startIndex: number) =>
         rows
           .map((p, i) => {
             const idx = startIndex + i + 1;
+            const tempBad =
+              thresholds &&
+              (p.temperature < thresholds.tempMin || p.temperature > thresholds.tempMax);
+
             const humBad =
               thresholds && (p.humidity < thresholds.humMin || p.humidity > thresholds.humMax);
             return `
               <tr>
                 <td class="c t">${pad2(idx)}</td>
-                <td class="c">${p.temperature?.toFixed(0) ?? '—'}</td>
+                <td class="c ${tempBad ? 'bad' : ''}">${p.temperature?.toFixed(0) ?? '—'}</td>
                 <td class="c ${humBad ? 'bad' : ''}">${p.humidity?.toFixed(0) ?? '—'}</td>
-                <td class="c">${p.latitude?.toFixed(6) ?? '—'}</td>
-                <td class="c">${p.longitude?.toFixed(6) ?? '—'}</td>
-                <td class="c">${p.movement ?? (i % 3 === 0 ? 'Moving' : 'Idle')}</td>
                 <td class="c">${p.battery != null ? `${Math.round(p.battery)}%` : '—'}</td>
                 <td class="c">${fmtIST(p.time)}</td>
               </tr>
@@ -463,12 +485,13 @@ export default function TripDetail() {
           })
           .join('');
 
-      const page2Rows = tableChunks.length ? renderTableRows(tableChunks[0], 0) : '';
+      const page2Rows = renderTableRows(page2Data, 0);
 
       const extraTablePagesHTML = extraChunks
         .map((rows, idx) => {
           const pageNo = 3 + idx;
-          const startIndex = ROWS_PER_TABLE_PAGE * (idx + 1);
+          const startIndex = PAGE2_ROWS + OTHER_ROWS * idx;
+
           const isLast = idx === extraChunks.length - 1;
 
           return `
@@ -481,9 +504,6 @@ export default function TripDetail() {
           <th>Sl No</th>
           <th>Temp °C</th>
           <th>Hum %RH</th>
-          <th>Latitude</th>
-          <th>Longitude</th>
-          <th>Movement</th>
           <th>Battery</th>
           <th>Timestamp (IST)</th>
         </tr>
@@ -629,7 +649,8 @@ export default function TripDetail() {
           <div class="acap">Humidity samples in alert</div>
         </div>
         <div class="a">
-          <div class="anum">${durationStr.replace(' ', '<br/>')}</div>
+          <div class="anum">${durationStr}</div>
+
           <div class="acap">Trip Duration</div>
         </div>
       </div>
@@ -653,8 +674,8 @@ export default function TripDetail() {
       <div style="display:flex;gap:16px;font-size:11px;color:#475467;margin-top:6px">
         <span><i style="display:inline-block;width:26px;height:4px;background:#3B82F6;margin-right:6px;border-radius:2px"></i>Temperature (°C)</span>
         <span><i style="display:inline-block;width:26px;height:4px;background:#22C55E;margin-right:6px;border-radius:2px"></i>Humidity (%RH)</span>
-        <span><i style="display:inline-block;width:26px;height:4px;background:#EF4444;margin-right:6px;border-radius:2px"></i>Temp Limits</span>
-        <span><i style="display:inline-block;width:26px;height:4px;background:#F97316;margin-right:6px;border-radius:2px"></i>Humid Limits</span>
+        <span><i style="display:inline-block;width:26px;height:4px;background:#EF4444;margin-right:6px;border-radius:2px"></i>Temperature Breach</span>
+        <span><i style="display:inline-block;width:26px;height:4px;background:#F97316;margin-right:6px;border-radius:2px"></i>Humidity Breach</span>
       </div>
     </div>
 
@@ -665,9 +686,6 @@ export default function TripDetail() {
           <th>Sl No</th>
           <th>Temp °C</th>
           <th>Hum %RH</th>
-          <th>Latitude</th>
-          <th>Longitude</th>
-          <th>Movement</th>
           <th>Battery</th>
           <th>Timestamp (IST)</th>
         </tr>
@@ -678,7 +696,7 @@ export default function TripDetail() {
     </table>
 
     ${
-      tableChunks.length <= 1
+      extraChunks.length === 0
         ? `<div style="font-size:10px;color:#6b7280;line-height:1.4;border-top:1px solid #e5e7eb;padding-top:6px;margin-top:6px">
            This report is auto-generated by thinxsense™. The Quality of Process (QoP) reflects transit
            conditions during the specified interval and does not guarantee consignment quality. GND Solutions
