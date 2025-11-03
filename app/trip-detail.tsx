@@ -484,7 +484,7 @@ export default function TripDetail() {
       ].join(' ');
       // Pagination helpers
       const PAGE2_ROWS = 18;
-      const OTHER_ROWS = 28;
+      const OTHER_ROWS = 32;
       function chunk<T>(arr: T[], size: number): T[][] {
         const out: T[][] = [];
         for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -557,9 +557,7 @@ export default function TripDetail() {
           const isLast = idx === extraChunks.length - 1;
 
           return `
-  <div class="pb"></div>
   <div class="page">
-    <div class="page-content">
     <div class="h2">Report Summary (continued)</div>
     <table>
       <thead>
@@ -576,8 +574,7 @@ export default function TripDetail() {
       </tbody>
     </table>
     ${isLast ? disclaimerBox : ''}
-    </div>
-  ${footerHtml(pageNo)}
+  ${isLast ? footerHtml(pageNo) : ''}
   </div>`;
         })
         .join('');
@@ -592,13 +589,9 @@ export default function TripDetail() {
   body { font-family: Arial, Helvetica, sans-serif; color:#111827; }
 
   .page {
-    position: relative;
     page-break-after: always;
   }
   .page:last-child { page-break-after: auto; }
-  .page-content {
-    padding-bottom: 40px;
-  }
   .card {
     border:1px solid #3054E54D; border-radius:10px; padding:8px; margin-bottom:6px;
     break-inside: avoid; page-break-inside: avoid;
@@ -627,15 +620,11 @@ export default function TripDetail() {
   .h2 { font-weight:800; color:#0f172a; font-size:13px; margin:6px 0 6px; }
 
   .footerx {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
     display:grid; grid-template-columns: 1fr auto 1fr; align-items:center;
     font-size:10px; color:#6b7280;
     border-top: 1px solid #e5e7eb;
     padding-top: 8px;
-    height: 30px;
+    margin-top: 8px;
   }
   .footerx .left  { justify-self:start; }
   .footerx .center{ justify-self:center; font-weight:600; }
