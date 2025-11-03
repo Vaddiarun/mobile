@@ -361,7 +361,7 @@ export default function TripDetail() {
     if (!start || !end) return '';
 
     const W = 800,
-      H = 260,
+      H = 390,
       PAD = 24;
     const { centerLat, centerLng, zoom } = fitCenterZoom(start, end, W, H, PAD);
     const KEY = GOOGLE_STATIC_MAPS_KEY?.trim();
@@ -441,10 +441,10 @@ export default function TripDetail() {
         if (trip?.startLocation && trip?.endLocation) {
           mapBlock = buildMapWithCurvedOverlayBlock(trip.startLocation, trip.endLocation);
         } else {
-          mapBlock = `<div style="height:260px;border:1px solid #e5e7eb;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#6b7280">Path preview unavailable</div>`;
+          mapBlock = `<div style="height:390px;border:1px solid #e5e7eb;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#6b7280">Path preview unavailable</div>`;
         }
       } catch {
-        mapBlock = `<div style="height:260px;border:1px solid #e5e7eb;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#6b7280">Map unavailable</div>`;
+        mapBlock = `<div style="height:390px;border:1px solid #e5e7eb;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#6b7280">Map unavailable</div>`;
       }
 
       // Brand & QoP badges  (logo smaller)
@@ -627,6 +627,8 @@ export default function TripDetail() {
     border-top: 1px solid #e5e7eb;
     padding-top: 8px;
     margin-top: 12px;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   .footerx .left  { justify-self:start; }
   .footerx .center{ justify-self:center; font-weight:600; }
