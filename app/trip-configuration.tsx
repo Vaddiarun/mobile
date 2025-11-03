@@ -758,42 +758,42 @@ export default function TripConfiguration() {
       if (tripNameMatch) {
         tripStartTime = parseInt(tripNameMatch[1]);
       }
-      
+
       // Fallback: check local storage
       if (!tripStartTime) {
         const localTrips = getTrips() || [];
         const localTrip = localTrips.find((t: any) => t.deviceID === deviceName);
         tripStartTime = localTrip?.tripStartTime || 0;
       }
-      
+
       const tripStartSeconds = Math.floor(tripStartTime / 1000);
-      
-      console.log('📊 FILTERING packets:');
-      console.log('  Trip name:', activeTrip.tripName);
-      console.log('  Trip start time (ms):', tripStartTime);
-      console.log('  Trip start time (seconds):', tripStartSeconds);
-      console.log('  Total packets from device:', collectedPackets.length);
-      
+
+      // console.log('📊 FILTERING packets:');
+      // console.log('  Trip name:', activeTrip.tripName);
+      // console.log('  Trip start time (ms):', tripStartTime);
+      // console.log('  Trip start time (seconds):', tripStartSeconds);
+      // console.log('  Total packets from device:', collectedPackets.length);
+
       if (collectedPackets.length > 0) {
-        console.log('  First packet time:', collectedPackets[0].time);
-        console.log('  Last packet time:', collectedPackets[collectedPackets.length - 1].time);
+        // console.log('  First packet time:', collectedPackets[0].time);
+        // console.log('  Last packet time:', collectedPackets[collectedPackets.length - 1].time);
       }
 
       // Filter: Only keep packets where packet.time >= trip start time (in seconds)
       actualPackets = collectedPackets.filter((packet: any) => {
         const keep = packet.time >= tripStartSeconds;
         if (!keep) {
-          console.log('  ❌ Removing packet with time:', packet.time, '(before trip start)');
+          // console.log('  ❌ Removing packet with time:', packet.time, '(before trip start)');
         }
         return keep;
       });
-      
+
       actualTotalPackets = d4Info?.totalPackets || collectedPackets.length;
       batteryPercentage = d4Info?.batteryPercentage || 0;
-      
-      console.log('✅ Filtering complete:');
-      console.log('  Packets kept:', actualPackets.length);
-      console.log('  Packets removed:', collectedPackets.length - actualPackets.length);
+
+      // console.log('✅ Filtering complete:');
+      // console.log('  Packets kept:', actualPackets.length);
+      // console.log('  Packets removed:', collectedPackets.length - actualPackets.length);
 
       await new Promise((resolve) => setTimeout(resolve, 500));
 

@@ -49,8 +49,6 @@ export default function BluetoothCommunication() {
   const hasNavigatedRef = useRef(false);
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-
-
   useEffect(() => {
     if (mountedRef.current) return;
     mountedRef.current = true;
@@ -91,12 +89,12 @@ export default function BluetoothCommunication() {
     setScaning(true);
 
     try {
-      console.log('🔥 ULTRA-AGGRESSIVE BLE SCAN INITIATED');
+      console.log('BLE SCAN INITIATED');
 
       // Try cached session first for instant reconnection
       const cachedSession = bleSessionStore.getSession(qrCode as string);
       if (cachedSession && Date.now() - cachedSession.timestamp < 300000) {
-        console.log('⚡ Attempting instant cached reconnection...');
+        console.log('Attempting instant cached reconnection...');
         try {
           const cachedDevice = await bleManager.connectToDevice(cachedSession.deviceId, {
             timeout: 2000,
@@ -106,7 +104,12 @@ export default function BluetoothCommunication() {
             deviceFoundRef.current = true;
             bleManager.stopDeviceScan();
             setScaning(false);
-            await handleDeviceConnection(cachedDevice, cachedSession.serviceUUID, cachedSession.txUUID, cachedSession.rxUUID);
+            await handleDeviceConnection(
+              cachedDevice,
+              cachedSession.serviceUUID,
+              cachedSession.txUUID,
+              cachedSession.rxUUID
+            );
             return;
           }
         } catch (cacheError) {
@@ -122,51 +125,51 @@ export default function BluetoothCommunication() {
 
       const attemptScan = () => {
         scanAttempt++;
-        console.log(`🔍 POWER SCAN ${scanAttempt}/${maxAttempts} - FULL SPECTRUM`);
+        console.log(`SCAN ${scanAttempt}/${maxAttempts}`);
 
         bleManager.startDeviceScan(
           null,
           { allowDuplicates: true, scanMode: 2 },
           async (error, device) => {
-        if (error) {
-          console.error('Bluetooth scan error:', error);
-          bleManager.stopDeviceScan();
-          if (scanTimeoutRef.current) {
-            clearTimeout(scanTimeoutRef.current);
-            scanTimeoutRef.current = null;
-          }
-          if (!deviceFoundRef.current) {
-            setLoading(false);
-            setScaning(false);
-            setModelLoader(true);
-          }
-          return;
-        }
-
-        if (device?.name === (qrCode as string)) {
-          const rssi = device.rssi || -100;
-          
-          if (!foundDevices.has(device.id)) {
-            foundDevices.set(device.id, device);
-            console.log(`🎯 TARGET ACQUIRED! RSSI: ${rssi}dBm`);
-          }
-
-          if (!bestDevice || rssi > bestDevice.rssi) {
-            bestDevice = { device, rssi };
-          }
-
-          if (!deviceFoundRef.current && rssi > -85) {
-            console.log(`⚡ CONNECTING INSTANTLY (RSSI: ${rssi}dBm)`);
-            deviceFoundRef.current = true;
-            if (scanTimeoutRef.current) {
-              clearTimeout(scanTimeoutRef.current);
-              scanTimeoutRef.current = null;
+            if (error) {
+              console.error('Bluetooth scan error:', error);
+              bleManager.stopDeviceScan();
+              if (scanTimeoutRef.current) {
+                clearTimeout(scanTimeoutRef.current);
+                scanTimeoutRef.current = null;
+              }
+              if (!deviceFoundRef.current) {
+                setLoading(false);
+                setScaning(false);
+                setModelLoader(true);
+              }
+              return;
             }
-            bleManager.stopDeviceScan();
-            setScaning(false);
-            await handleDeviceConnection(device);
-          }
-        }
+
+            if (device?.name === (qrCode as string)) {
+              const rssi = device.rssi || -100;
+
+              if (!foundDevices.has(device.id)) {
+                foundDevices.set(device.id, device);
+                console.log(`TARGET ACQUIRED! RSSI: ${rssi}dBm`);
+              }
+
+              if (!bestDevice || rssi > bestDevice.rssi) {
+                bestDevice = { device, rssi };
+              }
+
+              if (!deviceFoundRef.current && rssi > -85) {
+                console.log(`⚡ CONNECTING INSTANTLY (RSSI: ${rssi}dBm)`);
+                deviceFoundRef.current = true;
+                if (scanTimeoutRef.current) {
+                  clearTimeout(scanTimeoutRef.current);
+                  scanTimeoutRef.current = null;
+                }
+                bleManager.stopDeviceScan();
+                setScaning(false);
+                await handleDeviceConnection(device);
+              }
+            }
           }
         );
       };
@@ -179,7 +182,7 @@ export default function BluetoothCommunication() {
 
           if (scanAttempt < maxAttempts) {
             console.log(`🔄 RAPID RETRY ${scanAttempt + 1}/${maxAttempts}`);
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             attemptScan();
           } else if (bestDevice) {
             console.log(`🎯 CONNECTING TO BEST SIGNAL (RSSI: ${bestDevice.rssi}dBm)`);
@@ -193,7 +196,7 @@ export default function BluetoothCommunication() {
             setScaning(false);
             await handleDeviceConnection(device);
           } else {
-            console.log('❌ DEVICE NOT FOUND AFTER POWER SCAN');
+            console.log('❌ DEVICE NOT FOUND AFTER SCAN');
             setLoading(false);
             setScaning(false);
             setModelLoader(true);
@@ -210,7 +213,12 @@ export default function BluetoothCommunication() {
     }
   }
 
-  async function handleDeviceConnection(device: Device, cachedServiceUUID?: string, cachedTxUUID?: string, cachedRxUUID?: string) {
+  async function handleDeviceConnection(
+    device: Device,
+    cachedServiceUUID?: string,
+    cachedTxUUID?: string,
+    cachedRxUUID?: string
+  ) {
     try {
       console.log('Connecting to device...');
       const connectedDevice = await device.connect({ timeout: 5000 });
@@ -220,7 +228,7 @@ export default function BluetoothCommunication() {
       connectedDevice.onDisconnected((error, device) => {
         if (error || device?.name) {
           console.log('⚠️ Device disconnected:', device?.name, error?.message);
-          
+
           if (!hasNavigatedRef.current && mountedRef.current) {
             setShowDisconnectModal(true);
           }
@@ -237,7 +245,7 @@ export default function BluetoothCommunication() {
 
       await connectedDevice.discoverAllServicesAndCharacteristics();
       await connectedDevice.requestMTU(241);
-      
+
       let service, txChar, rxChar;
 
       if (cachedServiceUUID && cachedTxUUID && cachedRxUUID) {
@@ -472,7 +480,7 @@ export default function BluetoothCommunication() {
           try {
             const historyResult = await getTripHistory('', '', 1, 1000);
             let hasActiveTrip = false;
-            
+
             if (historyResult.success && historyResult.data?.trips) {
               const activeTrip = historyResult.data.trips.find(
                 (trip: any) => trip.deviceid === qrCode && trip.status !== 'completed'
@@ -496,7 +504,11 @@ export default function BluetoothCommunication() {
 
               // Send stop command to reset the device
               const stopConfig = buildA3Packet(60, false).toString('base64');
-              await device.writeCharacteristicWithResponseForService(serviceUUID, rxUUID, stopConfig);
+              await device.writeCharacteristicWithResponseForService(
+                serviceUUID,
+                rxUUID,
+                stopConfig
+              );
               console.log('✅ Sent A3 stop command to reset orphaned trip on device');
 
               // Wait a bit for device to process the stop command
@@ -667,15 +679,14 @@ export default function BluetoothCommunication() {
   return (
     <View className="flex-1 bg-white">
       {/* Back Button */}
-      <View className="absolute top-12 left-4 z-10">
+      <View className="absolute left-4 top-12 z-10">
         <TouchableOpacity
           onPress={handleBackPress}
-          className="h-10 w-10 items-center justify-center rounded-full bg-black/20"
-        >
+          className="h-10 w-10 items-center justify-center rounded-full bg-black/20">
           <MaterialIcons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
-      
+
       <View className="flex-1 items-center justify-center">
         <View className="relative items-center justify-center">
           <ActivityIndicator size={120} color="#1976D2" />

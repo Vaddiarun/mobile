@@ -56,6 +56,7 @@ export default function TripDetail() {
   const [error, setError] = useState<string | null>(null);
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const chartRef = useRef(null);
+  const pdfChartRef = useRef(null);
 
   const fetchTripDetails = useCallback(
     async (retryCount = 0) => {
@@ -388,7 +389,7 @@ export default function TripDetail() {
 <path 
   d="
     M ${x1} ${y1}
-    Q ${(parseFloat(x1) + parseFloat(x2)) / 2} ${(Math.min(parseFloat(y1), parseFloat(y2)) / 2 - 60).toFixed(1)}
+    Q ${((parseFloat(x1) + parseFloat(x2)) / 2).toFixed(1)} ${(Math.min(parseFloat(y1), parseFloat(y2)) - 60).toFixed(1)}
       ${x2} ${y2}
   "
   fill="none"
@@ -409,12 +410,12 @@ export default function TripDetail() {
   const generatePDF = async () => {
     setGeneratingPDF(true);
     try {
-      // Capture existing chart as PNG (unchanged)
+      // Capture wider chart for PDF
       let chartImgTag = '';
       try {
         await new Promise((r) => setTimeout(r, 120));
-        if (chartRef.current) {
-          const base64 = await captureRef(chartRef.current, {
+        if (pdfChartRef.current) {
+          const base64 = await captureRef(pdfChartRef.current, {
             result: 'base64',
             format: 'png',
             quality: 1,
@@ -958,6 +959,18 @@ export default function TripDetail() {
           </>
         )}
       </ScrollView>
+      
+      {/* Hidden wider chart for PDF generation only */}
+      <View style={{ position: 'absolute', left: -9999, top: 0 }}>
+        <View ref={pdfChartRef} collapsable={false} style={{ backgroundColor: 'white', padding: 8, borderRadius: 16 }}>
+          <DynamicLineChart
+            packets={packets}
+            thresholds={thresholds ?? undefined}
+            width={700}
+            height={220}
+          />
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
