@@ -185,6 +185,10 @@ export default function QRScanner() {
           codeScanner={codeScanner}
           onError={(error) => {
             console.error('Camera error:', error);
+            // Trigger failsafe for session/invalid-output-configuration or any camera error
+            if (error?.message?.includes('session/invalid-output-configuration') || error?.message?.includes('session/')) {
+              console.log('Camera session error detected - triggering failsafe');
+            }
             restartCamera();
           }}
         />
