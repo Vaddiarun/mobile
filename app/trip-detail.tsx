@@ -676,11 +676,11 @@ export default function TripDetail() {
 
         <div class="titleBlock">
           <div class="h1">Insights and Summary Report</div>
-          <div class="meta">Generated: ${nowStr} | QoP: <strong>${qopPercent}%</strong></div>
+          <div class="meta">Generated: ${nowStr}></div>
         </div>
 
         <div class="qopBlock">
-          <div class="qopTitle">Quality of Process:</div>
+          
           <div class="qopBands">
             ${qopBandsHtml}
           </div>
