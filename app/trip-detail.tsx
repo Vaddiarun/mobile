@@ -389,7 +389,7 @@ export default function TripDetail() {
 <path 
   d="
     M ${x1} ${y1}
-    Q ${((parseFloat(x1) + parseFloat(x2)) / 2).toFixed(1)} ${(Math.min(parseFloat(y1), parseFloat(y2)) - 60).toFixed(1)}
+    Q ${(parseFloat(x1) + parseFloat(x2)) / 2} ${(Math.min(parseFloat(y1), parseFloat(y2)) / 2 - 60).toFixed(1)}
       ${x2} ${y2}
   "
   fill="none"
