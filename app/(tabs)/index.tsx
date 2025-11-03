@@ -16,8 +16,10 @@ import { useRouter } from 'expo-router';
 import { Camera } from 'react-native-vision-camera';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { getUser } from '../../mmkv-storage/storage';
+import { getUser, hasCompletedAppTour, setAppTourComplete } from '../../mmkv-storage/storage';
 import { getHomeStatus, getTripHistory } from '../../services/RestApiServices/HistoryService';
+import TourOverlay from '../../components/TourOverlay';
+import { useTour } from '../../components/AppTourContext';
 
 export default function Home() {
   const insets = useSafeAreaInsets();
@@ -28,6 +30,10 @@ export default function Home() {
   const [tripOn, setTripOn] = useState(0);
   const [tripOff, setTripOff] = useState(0);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const { tourActive, currentStep, startTour, nextStep, skipTour } = useTour();
+  const [summaryLayout, setSummaryLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [recentTitleLayout, setRecentTitleLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [profileLayout, setProfileLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
 
   const loadUserData = useCallback(async () => {
     const user = getUser();
@@ -106,6 +112,14 @@ export default function Home() {
     }, [loadUserData])
   );
 
+  // Start tour only once on first mount after login
+  useEffect(() => {
+    if (!hasCompletedAppTour() && !tourActive) {
+      console.log('[Home] Initiating tour start');
+      setTimeout(() => startTour(), 1500);
+    }
+  }, []);
+
   const formatDate = (ts: number | string): string => {
     const d = new Date(ts);
     return d.toLocaleString('en-US', {
@@ -114,6 +128,64 @@ export default function Home() {
       hour: 'numeric',
       minute: '2-digit',
     });
+  };
+
+  const handleTourNext = () => {
+    if (currentStep === 0) {
+      nextStep();
+    } else if (currentStep === 1) {
+      nextStep();
+    } else if (currentStep === 2) {
+      router.push('/settings' as any);
+      setTimeout(() => nextStep(), 500);
+    } else if (currentStep === 3) {
+      router.push('/(tabs)' as any);
+      setTimeout(() => {
+        router.push('/(tabs)/qr-scanner' as any);
+        setTimeout(() => nextStep(), 500);
+      }, 300);
+    } else if (currentStep === 4) {
+      router.push('/(tabs)/history' as any);
+      setTimeout(() => nextStep(), 500);
+    } else {
+      handleTourSkip();
+    }
+  };
+
+  const handleTourSkip = () => {
+    skipTour();
+    setAppTourComplete();
+    router.push('/(tabs)' as any);
+  };
+
+  const getTourMessage = () => {
+    switch (currentStep) {
+      case 0:
+        return "Your daily trip summary: 'Initiated' displays the number of trips started today, while 'Completed' shows trips that have been stopped today.";
+      case 1:
+        return 'Recent Activity displays 3 most recently interacted trips, sorted by latest activity regardless of date. Tap any trip to view detailed information.';
+      case 2:
+        return 'Click on this button to navigate to your profile';
+      case 3:
+        return 'Scan the QR code on your device to establish connection. Ensure Bluetooth, Location, and WiFi are enabled for optimal connectivity.';
+      case 4:
+        return "Trip History: Switch between 'All' to view your complete trip history, or 'Today' for today's trips only. Click any trip to access detailed records, view route maps, and generate comprehensive PDF reports.";
+      default:
+        return '';
+    }
+  };
+
+  const getTourHighlight = () => {
+    switch (currentStep) {
+      case 0:
+        return summaryLayout.width > 0 ? summaryLayout : undefined;
+      case 1:
+        return recentTitleLayout.width > 0 ? recentTitleLayout : undefined;
+      case 2:
+        return profileLayout.width > 0 ? profileLayout : undefined;
+      default:
+        return undefined;
+    }
   };
 
   useEffect(() => {
@@ -185,13 +257,23 @@ export default function Home() {
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Settings"
-            onPress={() => router.push('/settings' as any)}>
+            onPress={() => router.push('/settings' as any)}
+            onLayout={(e) => {
+              const { x, y, width, height } = e.nativeEvent.layout;
+              setProfileLayout({ x: x + 16, y: y + insets.top + 1, width, height });
+            }}>
             <MaterialCommunityIcons name="account-circle-outline" size={40} color="#000" />
           </TouchableOpacity>
         </View>
 
         {/* Trip summary */}
-        <View className="mb-5 mt-3 rounded-xl bg-gray-100 p-4 py-10">
+        <View
+          className="mb-5 mt-3 rounded-xl bg-gray-100 p-4 py-10"
+          onLayout={(e) => {
+            e.currentTarget.measureInWindow((x, y, width, height) => {
+              setSummaryLayout({ x, y: y + 40, width, height });
+            });
+          }}>
           <Text className="mb-3 text-2xl font-bold text-black">Today’s Trips Overview</Text>
           <View className="flex-row justify-between">
             <View className="flex-1 items-start">
@@ -236,7 +318,20 @@ export default function Home() {
 
         {/* Recent Activity */}
         <View className="mb-3 mt-6 flex-row justify-between">
-          <Text className="text-[17px] font-bold text-black">Recent Activity</Text>
+          <Text
+            className="text-[17px] font-bold text-black"
+            onLayout={(e) => {
+              e.currentTarget.measureInWindow((x, y, width, height) => {
+                setRecentTitleLayout({
+                  x: x - 20,
+                  y: y + 40,
+                  width: width + 40,
+                  height: height + 10,
+                });
+              });
+            }}>
+            Recent Activity
+          </Text>
           <TouchableOpacity
             onPress={() => {
               router.push({ pathname: '/(tabs)/history', params: { forceTab: 'all' } });
@@ -278,6 +373,19 @@ export default function Home() {
           )}
         </View>
       </ScrollView>
+
+      {tourActive && currentStep <= 2 && (
+        <TourOverlay
+          visible={true}
+          message={getTourMessage()}
+          onNext={handleTourNext}
+          onSkip={handleTourSkip}
+          highlightArea={getTourHighlight()}
+          step={currentStep + 1}
+          totalSteps={6}
+          tooltipPosition={currentStep === 1 ? 'top' : 'bottom'}
+        />
+      )}
     </SafeAreaView>
   );
 }

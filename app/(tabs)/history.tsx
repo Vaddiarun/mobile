@@ -14,6 +14,9 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { getTripHistory } from '../../services/RestApiServices/HistoryService';
+import { useTour } from '../../components/AppTourContext';
+import TourOverlay from '../../components/TourOverlay';
+import { setAppTourComplete } from '../../mmkv-storage/storage';
 
 type TripRow = {
   id: string;
@@ -48,6 +51,7 @@ export default function History() {
   const [currentPage, setCurrentPage] = useState(1);
   const [showAllPages, setShowAllPages] = useState(false);
   const RECORDS_PER_PAGE = 10;
+  const { tourActive, currentStep, skipTour } = useTour();
 
   const loadAllTrips = useCallback(async (from: string, to: string, retryCount = 0) => {
     setLoading(true);
@@ -185,6 +189,13 @@ export default function History() {
   }, [filteredData, currentPage]);
 
   const totalPages = Math.ceil(filteredData.length / RECORDS_PER_PAGE);
+
+  const handleTourFinish = () => {
+    console.log('[History] Finishing tour');
+    setAppTourComplete();
+    skipTour();
+    router.push('/(tabs)' as any);
+  };
 
   const renderItem = ({ item }: { item: TripRow }) => (
     <TouchableOpacity
@@ -423,6 +434,15 @@ export default function History() {
           )}
         </View>
       </View>
+
+      <TourOverlay
+        visible={tourActive && currentStep === 5}
+        message="Trip History: Switch between 'All' to view your complete trip history, or 'Today' for today's trips only. Click any trip to access detailed records, view route maps, and generate comprehensive PDF reports."
+        onNext={handleTourFinish}
+        onSkip={handleTourFinish}
+        step={6}
+        totalSteps={6}
+      />
     </SafeAreaView>
   );
 }

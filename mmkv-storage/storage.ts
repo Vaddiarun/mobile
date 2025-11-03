@@ -69,3 +69,21 @@ export const getData = (key: string): any | null => {
 export const clearData = (key: string) => {
   storage.delete(key);
 };
+
+// Onboarding flag
+export const hasCompletedOnboarding = (): boolean => {
+  return storage.getBoolean('hasCompletedOnboarding') ?? false;
+};
+
+export const setOnboardingComplete = () => {
+  storage.set('hasCompletedOnboarding', true);
+};
+
+// App tour flag
+export const hasCompletedAppTour = (): boolean => {
+  return storage.getBoolean('hasCompletedAppTour') ?? false;
+};
+
+export const setAppTourComplete = () => {
+  storage.set('hasCompletedAppTour', true);
+};

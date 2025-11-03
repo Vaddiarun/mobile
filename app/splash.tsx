@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { View } from 'react-native';
 import { Image } from 'expo-image';
-import { getUser } from '../mmkv-storage/storage';
+import { getUser, hasCompletedOnboarding } from '../mmkv-storage/storage';
 import { getTripHistory } from '../services/RestApiServices/HistoryService';
 
 export default function Splash() {
@@ -11,6 +11,12 @@ export default function Splash() {
 
   useEffect(() => {
     const checkAuthAndTrips = async () => {
+      // Check if first time user
+      if (!hasCompletedOnboarding()) {
+        router.replace('/onboarding');
+        return;
+      }
+
       const user = getUser();
       if (user && user.data && user.data.token) {
         // Check if user has any active trips

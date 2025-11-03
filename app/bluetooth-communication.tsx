@@ -92,8 +92,8 @@ export default function BluetoothCommunication() {
       console.log('BLE SCAN INITIATED');
 
       // Try cached session first for instant reconnection
-      const cachedSession = bleSessionStore.getSession(qrCode as string);
-      if (cachedSession && Date.now() - cachedSession.timestamp < 300000) {
+      const cachedSession = bleSessionStore.getSession();
+      if (cachedSession?.deviceName === qrCode && Date.now() - cachedSession.timestamp < 300000) {
         console.log('Attempting instant cached reconnection...');
         try {
           const cachedDevice = await bleManager.connectToDevice(cachedSession.deviceId, {
@@ -117,18 +117,24 @@ export default function BluetoothCommunication() {
         }
       }
 
-      // ULTRA-AGGRESSIVE: Continuous rapid scanning
+      // ULTRA-AGGRESSIVE: Continuous rapid scanning with device accumulation
       let scanAttempt = 0;
       const maxAttempts = 5;
-      const foundDevices = new Map<string, Device>();
+      const foundDevices = new Map<string, Device>(); // Persists across all attempts
       let bestDevice: { device: Device; rssi: number } | null = null;
+
+      // Use service UUID filter if available to cut through noise in crowded environments
+      const serviceFilter = cachedSession?.serviceUUID ? [cachedSession.serviceUUID] : null;
+      if (serviceFilter) {
+        console.log('🎯 FILTERING BY SERVICE UUID - ignoring 100s of other devices');
+      }
 
       const attemptScan = () => {
         scanAttempt++;
         console.log(`SCAN ${scanAttempt}/${maxAttempts}`);
 
         bleManager.startDeviceScan(
-          null,
+          serviceFilter,
           { allowDuplicates: true, scanMode: 2 },
           async (error, device) => {
             if (error) {
@@ -158,8 +164,9 @@ export default function BluetoothCommunication() {
                 bestDevice = { device, rssi };
               }
 
-              if (!deviceFoundRef.current && rssi > -85) {
-                console.log(`⚡ CONNECTING INSTANTLY (RSSI: ${rssi}dBm)`);
+              // Connect INSTANTLY on ANY signal strength for weak devices
+              if (!deviceFoundRef.current) {
+                console.log(`⚡ INSTANT CONNECT (RSSI: ${rssi}dBm)`);
                 deviceFoundRef.current = true;
                 if (scanTimeoutRef.current) {
                   clearTimeout(scanTimeoutRef.current);
@@ -174,35 +181,43 @@ export default function BluetoothCommunication() {
         );
       };
 
-      attemptScan();
-
-      scanTimeoutRef.current = setTimeout(async () => {
-        if (!deviceFoundRef.current && mountedRef.current) {
-          bleManager.stopDeviceScan();
-
-          if (scanAttempt < maxAttempts) {
-            console.log(`🔄 RAPID RETRY ${scanAttempt + 1}/${maxAttempts}`);
-            await new Promise((resolve) => setTimeout(resolve, 200));
-            attemptScan();
-          } else if (bestDevice) {
-            console.log(`🎯 CONNECTING TO BEST SIGNAL (RSSI: ${bestDevice.rssi}dBm)`);
-            deviceFoundRef.current = true;
-            setScaning(false);
-            await handleDeviceConnection(bestDevice.device);
-          } else if (foundDevices.size > 0) {
-            console.log('🎯 CONNECTING TO ANY FOUND DEVICE');
-            const device = Array.from(foundDevices.values())[0];
-            deviceFoundRef.current = true;
-            setScaning(false);
-            await handleDeviceConnection(device);
-          } else {
-            console.log('❌ DEVICE NOT FOUND AFTER SCAN');
-            setLoading(false);
-            setScaning(false);
-            setModelLoader(true);
-          }
+      const scheduleTimeout = () => {
+        if (scanTimeoutRef.current) {
+          clearTimeout(scanTimeoutRef.current);
         }
-      }, 5000);
+        
+        scanTimeoutRef.current = setTimeout(async () => {
+          if (!deviceFoundRef.current && mountedRef.current) {
+            bleManager.stopDeviceScan();
+
+            if (scanAttempt < maxAttempts) {
+              console.log(`🔄 RAPID RETRY ${scanAttempt + 1}/${maxAttempts}`);
+              await new Promise((resolve) => setTimeout(resolve, 200));
+              attemptScan();
+              scheduleTimeout(); // Schedule next timeout
+            } else if (bestDevice) {
+              console.log(`🎯 CONNECTING TO BEST SIGNAL (RSSI: ${bestDevice.rssi}dBm)`);
+              deviceFoundRef.current = true;
+              setScaning(false);
+              await handleDeviceConnection(bestDevice.device);
+            } else if (foundDevices.size > 0) {
+              console.log('🎯 CONNECTING TO ANY FOUND DEVICE');
+              const device = Array.from(foundDevices.values())[0];
+              deviceFoundRef.current = true;
+              setScaning(false);
+              await handleDeviceConnection(device);
+            } else {
+              console.log('❌ DEVICE NOT FOUND AFTER SCAN');
+              setLoading(false);
+              setScaning(false);
+              setModelLoader(true);
+            }
+          }
+        }, 10000); // 10 seconds per scan to catch slow-advertising devices
+      };
+
+      attemptScan();
+      scheduleTimeout();
     } catch (e) {
       console.error('Scan initialization error:', e);
       setLoading(false);
@@ -229,6 +244,16 @@ export default function BluetoothCommunication() {
         if (error || device?.name) {
           console.log('⚠️ Device disconnected:', device?.name, error?.message);
 
+          if (!hasNavigatedRef.current && mountedRef.current) {
+            setShowDisconnectModal(true);
+          }
+        }
+      });
+
+      // Add connection error handler
+      connectedDevice.onDisconnected((error) => {
+        if (error?.message?.includes('was disconnected')) {
+          console.log('⚠️ Connection error - device disconnected');
           if (!hasNavigatedRef.current && mountedRef.current) {
             setShowDisconnectModal(true);
           }
@@ -284,10 +309,14 @@ export default function BluetoothCommunication() {
         setLoading(false);
         setModelLoader(true);
       }
-    } catch (connectionError) {
+    } catch (connectionError: any) {
       console.error('Connection error:', connectionError);
-      setLoading(false);
-      setModelLoader(true);
+      if (connectionError?.message?.includes('was disconnected')) {
+        setShowDisconnectModal(true);
+      } else {
+        setLoading(false);
+        setModelLoader(true);
+      }
     }
   }
 

@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTour } from '../../components/AppTourContext';
+import TourOverlay from '../../components/TourOverlay';
 import {
   View,
   Text,
@@ -26,6 +28,7 @@ export default function QRScanner() {
   const [retryCount, setRetryCount] = useState(0);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const { tourActive, currentStep, nextStep, skipTour } = useTour();
 
   useFocusEffect(
     useCallback(() => {
@@ -175,6 +178,11 @@ export default function QRScanner() {
     }
   }, [retryCount]);
 
+  const handleTourNext = () => {
+    router.push('/(tabs)/history' as any);
+    setTimeout(() => nextStep(), 500);
+  };
+
   return (
     <View style={styles.container}>
       {device && !isScanning && cameraActive && (
@@ -239,6 +247,15 @@ export default function QRScanner() {
           setCameraActive(false);
           setTimeout(() => setCameraActive(true), 100);
         }}
+      />
+
+      <TourOverlay
+        visible={tourActive && currentStep === 4}
+        message="Scan the QR code on your device to establish connection. Ensure Bluetooth, Location, and WiFi are enabled for optimal connectivity."
+        onNext={handleTourNext}
+        onSkip={skipTour}
+        step={5}
+        totalSteps={6}
       />
     </View>
   );
