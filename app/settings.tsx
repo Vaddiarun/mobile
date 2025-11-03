@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { getUser, clearUser } from '../mmkv-storage/storage';
 import CustomModal from '../components/CustomModal';
-import { deleteUser } from '../services/RestApiServices/AuthenticateService';
+import { logoutUser } from '../services/RestApiServices/AuthenticateService';
 import TourOverlay from '../components/TourOverlay';
 import { useTour } from '../components/AppTourContext';
 
@@ -26,18 +26,12 @@ export default function Settings() {
 
   const confirmLogout = async () => {
     try {
-      const body = {
-        username: user?.data?.user?.Username || '',
-        phone: user?.data?.user?.Phone || '',
-        email: user?.data?.user?.Email || '',
-      };
-
-      await deleteUser(body);
+      await logoutUser();
       clearUser();
-      router.replace('/splash');
+      router.replace('/login');
     } catch (error) {
       clearUser();
-      router.replace('/splash');
+      router.replace('/login');
     } finally {
       setShowLogoutModal(false);
     }

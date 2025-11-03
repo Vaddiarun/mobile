@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, Image, BackHandler } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import GNDSvg from '../assets/images/GND.svg';
 import axios from 'axios';
 import { BASE_URL } from '../services/apiClient';
@@ -9,11 +9,13 @@ import CustomModal from '../components/CustomModal';
 
 export default function Register() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [loading, setLoading] = useState(false);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [mobile, setMobile] = useState('');
-  const [errors, setErrors] = useState<{ name?: string; email?: string; mobile?: string }>({});
+  const [name, setName] = useState((params.name as string) || '');
+  const [email, setEmail] = useState((params.email as string) || '');
+  const [mobile, setMobile] = useState((params.phone as string) || '');
+  const [password, setPassword] = useState((params.password as string) || '');
+  const [errors, setErrors] = useState<{ name?: string; email?: string; mobile?: string; password?: string }>({});
   const [modal, setModal] = useState<{
     visible: boolean;
     type: 'success' | 'error' | 'info' | 'warning';
@@ -43,6 +45,16 @@ export default function Register() {
         ? 'Enter valid mobile number'
         : '';
 
+  const validatePassword = (val: string) => {
+    if (!val.trim()) return 'Password is required';
+    if (val.length < 8) return 'At least 8 characters';
+    if (!/[A-Z]/.test(val)) return 'Need 1 uppercase letter';
+    if (!/[a-z]/.test(val)) return 'Need 1 lowercase letter';
+    if (!/[0-9]/.test(val)) return 'Need 1 number';
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(val)) return 'Need 1 special character';
+    return '';
+  };
+
   const handleSubmit = async () => {
     if (name.includes(' ')) {
       setModal({
@@ -57,8 +69,9 @@ export default function Register() {
     const nameErr = validateName(name);
     const emailErr = validateEmail(email);
     const mobileErr = validateMobile(mobile);
-    setErrors({ name: nameErr, email: emailErr, mobile: mobileErr });
-    if (nameErr || emailErr || mobileErr) return;
+    const passwordErr = validatePassword(password);
+    setErrors({ name: nameErr, email: emailErr, mobile: mobileErr, password: passwordErr });
+    if (nameErr || emailErr || mobileErr || passwordErr) return;
 
     setLoading(true);
     try {
@@ -67,6 +80,7 @@ export default function Register() {
         username: name,
         email,
         phone: formattedPhone,
+        password,
       });
 
       setModal({
@@ -137,6 +151,14 @@ export default function Register() {
           placeholder: 'Enter Mobile Number',
           keyboardType: 'number-pad' as const,
         },
+        {
+          label: 'Password',
+          value: password,
+          setValue: setPassword,
+          error: errors.password,
+          placeholder: 'Enter Password',
+          secureTextEntry: true,
+        },
       ].map((field, idx) => (
         <View key={idx} className="mb-6">
           <Text className="mb-1 font-semibold text-gray-700">{field.label}*</Text>
@@ -145,6 +167,7 @@ export default function Register() {
             value={field.value}
             onChangeText={field.setValue}
             keyboardType={field.keyboardType}
+            secureTextEntry={field.secureTextEntry}
             className={`rounded-lg border px-4 py-3 text-gray-800 ${
               field.error ? 'border-red-500' : 'border-blue-400'
             }`}
@@ -163,6 +186,10 @@ export default function Register() {
         </Text>
       </Pressable>
 
+      <Pressable onPress={() => router.push('/login')} className="mt-4">
+        <Text className="text-center text-base font-semibold text-blue-600 underline">Login instead</Text>
+      </Pressable>
+
       <CustomModal
         visible={modal.visible}
         type={modal.type}
@@ -171,7 +198,7 @@ export default function Register() {
         onClose={() => {
           setModal({ ...modal, visible: false });
           if (modal.type === 'success') {
-            router.push({ pathname: '/verifyotp', params: { name, email, phone: mobile } });
+            router.push({ pathname: '/verifyotp', params: { name, email, phone: mobile, password } });
           }
         }}
       />

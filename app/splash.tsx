@@ -17,28 +17,7 @@ export default function Splash() {
         return;
       }
 
-      const user = getUser();
-      if (user && user.data && user.data.token) {
-        // Check if user has any active trips
-        try {
-          const historyResult = await getTripHistory('', '', 1, 1000);
-          if (historyResult.success && historyResult.data?.trips) {
-            const hasActiveTrip = historyResult.data.trips.some(
-              (trip: any) => trip.status !== 'completed'
-            );
-            
-            if (hasActiveTrip) {
-              console.log('Active trip found, navigating to home');
-            }
-          }
-        } catch (error) {
-          console.log('Error checking trips:', error);
-        }
-        
-        router.replace('/(tabs)');
-      } else {
-        router.replace('/register');
-      }
+      router.replace('/login');
     };
 
     const t = setTimeout(checkAuthAndTrips, 1000);

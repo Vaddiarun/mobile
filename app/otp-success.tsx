@@ -1,19 +1,24 @@
 import React, { useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import OtpVerifiedSvg from '../assets/images/otp_verified.svg';
 
 export default function OtpSuccess() {
   const router = useRouter();
+  const { fromRegister } = useLocalSearchParams();
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      router.replace('/(tabs)');
+      if (fromRegister === 'true') {
+        router.replace('/login');
+      } else {
+        router.replace('/(tabs)');
+      }
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [fromRegister]);
 
   return (
     <SafeAreaView

@@ -9,12 +9,12 @@ import { saveUser } from '../mmkv-storage/storage';
 
 export default function VerifyOTP() {
   const router = useRouter();
-  const { name, email, phone } = useLocalSearchParams();
+  const { name, email, phone, password } = useLocalSearchParams();
 
   const [otp, setOtp] = useState(Array(6).fill(''));
   const inputs = useRef<(RNTextInput | null)[]>([]);
   const [error, setError] = useState('');
-  const [timer, setTimer] = useState(300); // use longer time for safety
+  const [timer, setTimer] = useState(30);
 
   useEffect(() => {
     const interval = setInterval(() => setTimer((prev) => Math.max(prev - 1, 0)), 1000);
@@ -87,7 +87,7 @@ export default function VerifyOTP() {
         console.log('   User:', userData.data.user);
         saveUser(userData);
 
-        router.replace('/otp-success');
+        router.replace({ pathname: '/otp-success', params: { fromRegister: 'true' } });
       } else {
         console.error('❌ Invalid response:', res.data);
         setError('OTP verification failed');
@@ -103,12 +103,13 @@ export default function VerifyOTP() {
       const res = await axios.post(`${BASE_URL}/${EndPoints.REGISTER}`, {
         username: name,
         email,
-        phone: `+91${phone}`, // ✅ Fixed here too
+        phone: `+91${phone}`,
+        password,
       });
 
       console.log('🔄 Resend response:', res.data);
       setOtp(Array(6).fill(''));
-      setTimer(300);
+      setTimer(30);
       setError('');
     } catch (e: any) {
       console.log('❌ Resend error:', e.response?.data || e.message);
@@ -118,6 +119,11 @@ export default function VerifyOTP() {
 
   return (
     <View className="flex-1 bg-white px-6 pt-20">
+      <TouchableOpacity
+        onPress={() => router.back()}
+        className="absolute left-4 top-12 z-10 h-10 w-10 items-center justify-center">
+        <Text className="text-3xl text-gray-700">←</Text>
+      </TouchableOpacity>
       <Text className="mb-1 mt-[150px] text-4xl font-bold text-gray-700">Verify your number</Text>
       <Text className="mb-8 text-gray-500">We’ve sent a code to +91 {phone}</Text>
 

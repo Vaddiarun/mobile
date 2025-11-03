@@ -28,3 +28,12 @@ export const deleteUser = async (body: any) => {
     return { success: false, error: error.message || error };
   }
 };
+
+export const logoutUser = async () => {
+  try {
+    const response = await apiClient.post(EndPoints.LOGOUT);
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.message || error };
+  }
+};
