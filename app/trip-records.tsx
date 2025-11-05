@@ -196,46 +196,39 @@ export default function TripRecords() {
             />
             {totalPages > 1 && (
               <View className="pb-4">
-                <View className="flex-row items-center justify-between">
-                  {/* Pagination controls - centered */}
-                  <View className="flex-1" />
-                  <View className="flex-row items-center gap-2">
-                    <TouchableOpacity
-                      onPress={() => setCurrentPage(1)}
-                      disabled={currentPage === 1}
-                      className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === 1 ? 'bg-gray-300' : 'bg-blue-600'}`}>
-                      <Text className={currentPage === 1 ? 'text-gray-500' : 'text-white'}>«</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === 1 ? 'bg-gray-300' : 'bg-blue-600'}`}>
-                      <Text className={currentPage === 1 ? 'text-gray-500' : 'text-white'}>‹</Text>
-                    </TouchableOpacity>
-                    <View className="h-9 w-12 items-center justify-center rounded-full bg-blue-600">
-                      <Text className="text-white font-semibold">{currentPage}</Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === totalPages ? 'bg-gray-300' : 'bg-blue-600'}`}>
-                      <Text className={currentPage === totalPages ? 'text-gray-500' : 'text-white'}>›</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setCurrentPage(totalPages)}
-                      disabled={currentPage === totalPages}
-                      className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === totalPages ? 'bg-gray-300' : 'bg-blue-600'}`}>
-                      <Text className={currentPage === totalPages ? 'text-gray-500' : 'text-white'}>»</Text>
-                    </TouchableOpacity>
+                <View className="flex-row items-center justify-center gap-2">
+                  <TouchableOpacity
+                    onPress={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === 1 ? 'bg-gray-300' : 'bg-blue-600'}`}>
+                    <Text className={currentPage === 1 ? 'text-gray-500' : 'text-white'}>«</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === 1 ? 'bg-gray-300' : 'bg-blue-600'}`}>
+                    <Text className={currentPage === 1 ? 'text-gray-500' : 'text-white'}>‹</Text>
+                  </TouchableOpacity>
+                  <View className="h-9 w-12 items-center justify-center rounded-full bg-blue-600">
+                    <Text className="text-white font-semibold">{currentPage}</Text>
                   </View>
-                  {/* 4 squares button - full right */}
-                  <View className="flex-1 items-end">
-                    <TouchableOpacity
-                      onPress={() => setShowAllPages(!showAllPages)}
-                      className="h-9 w-9 items-center justify-center rounded-full bg-blue-600">
-                      <MaterialCommunityIcons name="view-grid" size={18} color="white" />
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity
+                    onPress={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === totalPages ? 'bg-gray-300' : 'bg-blue-600'}`}>
+                    <Text className={currentPage === totalPages ? 'text-gray-500' : 'text-white'}>›</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className={`h-9 w-9 items-center justify-center rounded-full ${currentPage === totalPages ? 'bg-gray-300' : 'bg-blue-600'}`}>
+                    <Text className={currentPage === totalPages ? 'text-gray-500' : 'text-white'}>»</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setShowAllPages(!showAllPages)}
+                    className="h-9 w-9 items-center justify-center rounded-full bg-blue-600">
+                    <MaterialCommunityIcons name="view-grid" size={18} color="white" />
+                  </TouchableOpacity>
                 </View>
                 {showAllPages && (
                   <View className="mt-3 flex-row flex-wrap justify-center gap-2">

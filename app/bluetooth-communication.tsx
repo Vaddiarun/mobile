@@ -54,6 +54,14 @@ export default function BluetoothCommunication() {
     mountedRef.current = true;
 
     const checkAndScan = async () => {
+      // Ensure any previous scan is stopped
+      try {
+        bleManager.stopDeviceScan();
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      } catch (e) {
+        console.log('Cleanup before scan:', e);
+      }
+
       const btState = await bleManager.state();
       if (btState !== 'PoweredOn') {
         setModalMessage('Bluetooth is Off');
@@ -91,47 +99,51 @@ export default function BluetoothCommunication() {
     try {
       console.log('BLE SCAN INITIATED');
 
-      // Try cached session first for instant reconnection
-      const cachedSession = bleSessionStore.getSession();
-      if (cachedSession?.deviceName === qrCode && Date.now() - cachedSession.timestamp < 300000) {
-        console.log('Attempting instant cached reconnection...');
-        try {
-          const cachedDevice = await bleManager.connectToDevice(cachedSession.deviceId, {
-            timeout: 2000,
-          });
-          if (cachedDevice) {
-            console.log('✅ INSTANT RECONNECTION SUCCESS!');
-            deviceFoundRef.current = true;
-            bleManager.stopDeviceScan();
-            setScaning(false);
-            await handleDeviceConnection(
-              cachedDevice,
-              cachedSession.serviceUUID,
-              cachedSession.txUUID,
-              cachedSession.rxUUID
-            );
-            return;
-          }
-        } catch (cacheError) {
-          console.log('Cache miss, starting power scan...');
-        }
-      }
-
       // ULTRA-AGGRESSIVE: Continuous rapid scanning with device accumulation
       let scanAttempt = 0;
       const maxAttempts = 5;
       const foundDevices = new Map<string, Device>(); // Persists across all attempts
       let bestDevice: { device: Device; rssi: number } | null = null;
 
-      // Use service UUID filter if available to cut through noise in crowded environments
+      // Get cached session for filtering and reconnection attempts
+      const cachedSession = bleSessionStore.getSession();
       const serviceFilter = cachedSession?.serviceUUID ? [cachedSession.serviceUUID] : null;
       if (serviceFilter) {
-        console.log('🎯 FILTERING BY SERVICE UUID - ignoring 100s of other devices');
+        console.log('FILTERING BY SERVICE UUID');
       }
 
-      const attemptScan = () => {
+      const attemptScan = async () => {
         scanAttempt++;
         console.log(`SCAN ${scanAttempt}/${maxAttempts}`);
+
+        // Try cached reconnection before each scan attempt
+        if (cachedSession?.deviceName === qrCode && Date.now() - cachedSession.timestamp < 300000) {
+          console.log('Attempting cached reconnection...');
+          try {
+            const cachedDevice = await bleManager.connectToDevice(cachedSession.deviceId, {
+              timeout: 2000,
+            });
+            if (cachedDevice) {
+              console.log('✅ CACHED RECONNECTION SUCCESS!');
+              deviceFoundRef.current = true;
+              bleManager.stopDeviceScan();
+              if (scanTimeoutRef.current) {
+                clearTimeout(scanTimeoutRef.current);
+                scanTimeoutRef.current = null;
+              }
+              setScaning(false);
+              await handleDeviceConnection(
+                cachedDevice,
+                cachedSession.serviceUUID,
+                cachedSession.txUUID,
+                cachedSession.rxUUID
+              );
+              return;
+            }
+          } catch (cacheError) {
+            console.log('Cache miss, starting scan...');
+          }
+        }
 
         bleManager.startDeviceScan(
           serviceFilter,
@@ -173,6 +185,8 @@ export default function BluetoothCommunication() {
                   scanTimeoutRef.current = null;
                 }
                 bleManager.stopDeviceScan();
+                // Wait for scan to fully stop before connecting
+                await new Promise((resolve) => setTimeout(resolve, 300));
                 setScaning(false);
                 await handleDeviceConnection(device);
               }
@@ -185,7 +199,7 @@ export default function BluetoothCommunication() {
         if (scanTimeoutRef.current) {
           clearTimeout(scanTimeoutRef.current);
         }
-        
+
         scanTimeoutRef.current = setTimeout(async () => {
           if (!deviceFoundRef.current && mountedRef.current) {
             bleManager.stopDeviceScan();
@@ -193,7 +207,7 @@ export default function BluetoothCommunication() {
             if (scanAttempt < maxAttempts) {
               console.log(`🔄 RAPID RETRY ${scanAttempt + 1}/${maxAttempts}`);
               await new Promise((resolve) => setTimeout(resolve, 200));
-              attemptScan();
+              await attemptScan();
               scheduleTimeout(); // Schedule next timeout
             } else if (bestDevice) {
               console.log(`🎯 CONNECTING TO BEST SIGNAL (RSSI: ${bestDevice.rssi}dBm)`);
@@ -234,88 +248,95 @@ export default function BluetoothCommunication() {
     cachedTxUUID?: string,
     cachedRxUUID?: string
   ) {
-    try {
-      console.log('Connecting to device...');
-      const connectedDevice = await device.connect({ timeout: 5000 });
-      connectedDeviceRef.current = connectedDevice;
-      console.log('Device connected, discovering services...');
+    let retryCount = 0;
+    const maxRetries = 2;
 
-      connectedDevice.onDisconnected((error, device) => {
-        if (error || device?.name) {
-          console.log('⚠️ Device disconnected:', device?.name, error?.message);
+    while (retryCount <= maxRetries) {
+      try {
+        if (retryCount > 0) {
+          console.log(`Retry ${retryCount}/${maxRetries}`);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
 
-          if (!hasNavigatedRef.current && mountedRef.current) {
-            setShowDisconnectModal(true);
+        console.log('Connecting to device...');
+        const connectedDevice = await device.connect({ timeout: 10000, requestMTU: 241 });
+        connectedDeviceRef.current = connectedDevice;
+        console.log('Device connected, stabilizing...');
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        connectedDevice.onDisconnected((error, device) => {
+          if (error || device?.name) {
+            console.log('⚠️ Device disconnected:', device?.name, error?.message);
+            if (!hasNavigatedRef.current && mountedRef.current) {
+              setShowDisconnectModal(true);
+            }
           }
-        }
-      });
-
-      // Add connection error handler
-      connectedDevice.onDisconnected((error) => {
-        if (error?.message?.includes('was disconnected')) {
-          console.log('⚠️ Connection error - device disconnected');
-          if (!hasNavigatedRef.current && mountedRef.current) {
-            setShowDisconnectModal(true);
+          if (monitorSubscriptionRef.current && !hasNavigatedRef.current) {
+            try {
+              monitorSubscriptionRef.current.remove();
+              monitorSubscriptionRef.current = null;
+            } catch (e) {}
           }
-        }
-        if (monitorSubscriptionRef.current && !hasNavigatedRef.current) {
-          try {
-            monitorSubscriptionRef.current.remove();
-            monitorSubscriptionRef.current = null;
-          } catch (e) {
-            console.log('Error cleaning up on disconnect:', e);
-          }
-        }
-      });
-
-      await connectedDevice.discoverAllServicesAndCharacteristics();
-      await connectedDevice.requestMTU(241);
-
-      let service, txChar, rxChar;
-
-      if (cachedServiceUUID && cachedTxUUID && cachedRxUUID) {
-        // Use cached UUIDs for faster setup
-        console.log('Using cached service UUIDs');
-        service = { uuid: cachedServiceUUID };
-        txChar = { uuid: cachedTxUUID };
-        rxChar = { uuid: cachedRxUUID };
-      } else {
-        const services = await connectedDevice.services();
-        console.log('Services discovered:', services.length);
-        service = services[2] || services[0];
-        if (!service) {
-          throw new Error('No services found on device');
-        }
-        const chars = await connectedDevice.characteristicsForService(service.uuid);
-        txChar = chars.find((c) => c.isNotifiable || c.isIndicatable);
-        rxChar = chars.find((c) => c.isWritableWithResponse);
-      }
-
-      if (txChar?.uuid && rxChar?.uuid) {
-        console.log('Starting packet communication...');
-
-        bleSessionStore.setSession({
-          deviceId: connectedDevice.id,
-          deviceName: qrCode as string,
-          serviceUUID: service.uuid,
-          rxUUID: rxChar.uuid,
-          txUUID: txChar.uuid,
-          timestamp: Date.now(),
         });
 
-        startPacket(connectedDevice, service.uuid, txChar.uuid, rxChar.uuid);
-      } else {
-        console.error('Required characteristics not found');
-        setLoading(false);
-        setModelLoader(true);
-      }
-    } catch (connectionError: any) {
-      console.error('Connection error:', connectionError);
-      if (connectionError?.message?.includes('was disconnected')) {
-        setShowDisconnectModal(true);
-      } else {
-        setLoading(false);
-        setModelLoader(true);
+        console.log('Discovering services...');
+        await connectedDevice.discoverAllServicesAndCharacteristics();
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        let service, txChar, rxChar;
+
+        if (cachedServiceUUID && cachedTxUUID && cachedRxUUID) {
+          console.log('Using cached UUIDs');
+          service = { uuid: cachedServiceUUID };
+          txChar = { uuid: cachedTxUUID };
+          rxChar = { uuid: cachedRxUUID };
+        } else {
+          const services = await connectedDevice.services();
+          console.log('Services discovered:', services.length);
+          service = services[2] || services[0];
+          if (!service) throw new Error('No services found');
+          const chars = await connectedDevice.characteristicsForService(service.uuid);
+          txChar = chars.find((c) => c.isNotifiable || c.isIndicatable);
+          rxChar = chars.find((c) => c.isWritableWithResponse);
+        }
+
+        if (txChar?.uuid && rxChar?.uuid) {
+          console.log('Starting packet communication...');
+
+          bleSessionStore.setSession({
+            deviceId: connectedDevice.id,
+            deviceName: qrCode as string,
+            serviceUUID: service.uuid,
+            rxUUID: rxChar.uuid,
+            txUUID: txChar.uuid,
+            timestamp: Date.now(),
+          });
+
+          startPacket(connectedDevice, service.uuid, txChar.uuid, rxChar.uuid);
+          return;
+        } else {
+          throw new Error('Required characteristics not found');
+        }
+      } catch (connectionError: any) {
+        console.error(`Connection error (${retryCount + 1}):`, connectionError.message);
+
+        if (retryCount >= maxRetries) {
+          if (connectionError?.message?.includes('was disconnected')) {
+            setShowDisconnectModal(true);
+          } else {
+            setLoading(false);
+            setModelLoader(true);
+          }
+          return;
+        }
+
+        retryCount++;
+        try {
+          if (connectedDeviceRef.current) {
+            await connectedDeviceRef.current.cancelConnection();
+          }
+        } catch (e) {}
       }
     }
   }
@@ -728,7 +749,7 @@ export default function BluetoothCommunication() {
       <StatusModal
         visible={modelLoader}
         type="warning"
-        message={modalMessage || 'Device not found and inactive'}
+        message={modalMessage || 'Device not found or Inactive'}
         subMessage={modalSubMessage}
         onClose={() => {
           setModelLoader(false);
