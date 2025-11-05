@@ -48,20 +48,15 @@ export default function BluetoothCommunication() {
   const monitorSubscriptionRef = useRef<any>(null);
   const hasNavigatedRef = useRef(false);
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const connectingRef = useRef(false);
 
   useEffect(() => {
     if (mountedRef.current) return;
     mountedRef.current = true;
+    connectingRef.current = false;
+    deviceFoundRef.current = false;
 
     const checkAndScan = async () => {
-      // Ensure any previous scan is stopped
-      try {
-        bleManager.stopDeviceScan();
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      } catch (e) {
-        console.log('Cleanup before scan:', e);
-      }
-
       const btState = await bleManager.state();
       if (btState !== 'PoweredOn') {
         setModalMessage('Bluetooth is Off');
@@ -84,6 +79,8 @@ export default function BluetoothCommunication() {
         monitorSubscriptionRef.current.remove();
         monitorSubscriptionRef.current = null;
       }
+      connectingRef.current = false;
+      deviceFoundRef.current = false;
       setScaning(false);
       mountedRef.current = false;
     };
@@ -92,63 +89,30 @@ export default function BluetoothCommunication() {
   async function scanAndConnect() {
     if (scaning) return;
 
-    bleManager.stopDeviceScan();
+    try {
+      bleManager.stopDeviceScan();
+    } catch (e) {}
+    await new Promise((resolve) => setTimeout(resolve, 500));
     deviceFoundRef.current = false;
+    connectingRef.current = false;
     setScaning(true);
 
     try {
       console.log('BLE SCAN INITIATED');
 
-      // ULTRA-AGGRESSIVE: Continuous rapid scanning with device accumulation
       let scanAttempt = 0;
       const maxAttempts = 5;
-      const foundDevices = new Map<string, Device>(); // Persists across all attempts
+      const foundDevices = new Map<string, Device>();
       let bestDevice: { device: Device; rssi: number } | null = null;
 
-      // Get cached session for filtering and reconnection attempts
-      const cachedSession = bleSessionStore.getSession();
-      const serviceFilter = cachedSession?.serviceUUID ? [cachedSession.serviceUUID] : null;
-      if (serviceFilter) {
-        console.log('FILTERING BY SERVICE UUID');
-      }
-
-      const attemptScan = async () => {
+      const attemptScan = () => {
         scanAttempt++;
         console.log(`SCAN ${scanAttempt}/${maxAttempts}`);
 
-        // Try cached reconnection before each scan attempt
-        if (cachedSession?.deviceName === qrCode && Date.now() - cachedSession.timestamp < 300000) {
-          console.log('Attempting cached reconnection...');
-          try {
-            const cachedDevice = await bleManager.connectToDevice(cachedSession.deviceId, {
-              timeout: 2000,
-            });
-            if (cachedDevice) {
-              console.log('✅ CACHED RECONNECTION SUCCESS!');
-              deviceFoundRef.current = true;
-              bleManager.stopDeviceScan();
-              if (scanTimeoutRef.current) {
-                clearTimeout(scanTimeoutRef.current);
-                scanTimeoutRef.current = null;
-              }
-              setScaning(false);
-              await handleDeviceConnection(
-                cachedDevice,
-                cachedSession.serviceUUID,
-                cachedSession.txUUID,
-                cachedSession.rxUUID
-              );
-              return;
-            }
-          } catch (cacheError) {
-            console.log('Cache miss, starting scan...');
-          }
-        }
-
         bleManager.startDeviceScan(
-          serviceFilter,
-          { allowDuplicates: true, scanMode: 2 },
-          async (error, device) => {
+          null,
+          { allowDuplicates: false, scanMode: 2 },
+          (error, device) => {
             if (error) {
               console.error('Bluetooth scan error:', error);
               bleManager.stopDeviceScan();
@@ -176,19 +140,17 @@ export default function BluetoothCommunication() {
                 bestDevice = { device, rssi };
               }
 
-              // Connect INSTANTLY on ANY signal strength for weak devices
               if (!deviceFoundRef.current) {
                 console.log(`⚡ INSTANT CONNECT (RSSI: ${rssi}dBm)`);
                 deviceFoundRef.current = true;
+                connectingRef.current = true;
+                const targetDeviceId = device.id;
                 if (scanTimeoutRef.current) {
                   clearTimeout(scanTimeoutRef.current);
                   scanTimeoutRef.current = null;
                 }
-                bleManager.stopDeviceScan();
-                // Wait for scan to fully stop before connecting
-                await new Promise((resolve) => setTimeout(resolve, 300));
                 setScaning(false);
-                await handleDeviceConnection(device);
+                handleDeviceConnection(targetDeviceId);
               }
             }
           }
@@ -206,20 +168,23 @@ export default function BluetoothCommunication() {
 
             if (scanAttempt < maxAttempts) {
               console.log(`🔄 RAPID RETRY ${scanAttempt + 1}/${maxAttempts}`);
-              await new Promise((resolve) => setTimeout(resolve, 200));
-              await attemptScan();
-              scheduleTimeout(); // Schedule next timeout
+              setTimeout(() => {
+                attemptScan();
+                scheduleTimeout();
+              }, 200); // Schedule next timeout
             } else if (bestDevice) {
               console.log(`🎯 CONNECTING TO BEST SIGNAL (RSSI: ${bestDevice.rssi}dBm)`);
               deviceFoundRef.current = true;
+              connectingRef.current = true;
               setScaning(false);
-              await handleDeviceConnection(bestDevice.device);
+              handleDeviceConnection(bestDevice.device.id);
             } else if (foundDevices.size > 0) {
               console.log('🎯 CONNECTING TO ANY FOUND DEVICE');
               const device = Array.from(foundDevices.values())[0];
               deviceFoundRef.current = true;
+              connectingRef.current = true;
               setScaning(false);
-              await handleDeviceConnection(device);
+              handleDeviceConnection(device.id);
             } else {
               console.log('❌ DEVICE NOT FOUND AFTER SCAN');
               setLoading(false);
@@ -242,29 +207,26 @@ export default function BluetoothCommunication() {
     }
   }
 
-  async function handleDeviceConnection(
-    device: Device,
-    cachedServiceUUID?: string,
-    cachedTxUUID?: string,
-    cachedRxUUID?: string
-  ) {
+  async function handleDeviceConnection(deviceId: string) {
     let retryCount = 0;
-    const maxRetries = 2;
+    const maxRetries = 3;
 
     while (retryCount <= maxRetries) {
       try {
-        if (retryCount > 0) {
+        if (retryCount === 0) {
+          bleManager.stopDeviceScan();
+          await new Promise((resolve) => setTimeout(resolve, 800));
+        } else {
           console.log(`Retry ${retryCount}/${maxRetries}`);
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await new Promise((resolve) => setTimeout(resolve, 1500));
         }
-
+        
         console.log('Connecting to device...');
-        const connectedDevice = await device.connect({ timeout: 10000, requestMTU: 241 });
-        connectedDeviceRef.current = connectedDevice;
-        console.log('Device connected, stabilizing...');
-
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
+        const connectedDevice = await bleManager.connectToDevice(deviceId, {
+          timeout: 30000,
+          requestMTU: 241,
+        });
+        
         connectedDevice.onDisconnected((error, device) => {
           if (error || device?.name) {
             console.log('⚠️ Device disconnected:', device?.name, error?.message);
@@ -279,27 +241,20 @@ export default function BluetoothCommunication() {
             } catch (e) {}
           }
         });
+        
+        connectedDeviceRef.current = connectedDevice;
+        console.log('Device connected, discovering services...');
 
-        console.log('Discovering services...');
         await connectedDevice.discoverAllServicesAndCharacteristics();
-        await new Promise((resolve) => setTimeout(resolve, 400));
 
-        let service, txChar, rxChar;
-
-        if (cachedServiceUUID && cachedTxUUID && cachedRxUUID) {
-          console.log('Using cached UUIDs');
-          service = { uuid: cachedServiceUUID };
-          txChar = { uuid: cachedTxUUID };
-          rxChar = { uuid: cachedRxUUID };
-        } else {
-          const services = await connectedDevice.services();
-          console.log('Services discovered:', services.length);
-          service = services[2] || services[0];
-          if (!service) throw new Error('No services found');
-          const chars = await connectedDevice.characteristicsForService(service.uuid);
-          txChar = chars.find((c) => c.isNotifiable || c.isIndicatable);
-          rxChar = chars.find((c) => c.isWritableWithResponse);
-        }
+        const services = await connectedDevice.services();
+        console.log('Services discovered:', services.length);
+        const service = services[2] || services[0];
+        if (!service) throw new Error('No services found on device');
+        
+        const chars = await connectedDevice.characteristicsForService(service.uuid);
+        const txChar = chars.find((c) => c.isNotifiable || c.isIndicatable);
+        const rxChar = chars.find((c) => c.isWritableWithResponse);
 
         if (txChar?.uuid && rxChar?.uuid) {
           console.log('Starting packet communication...');
@@ -319,24 +274,16 @@ export default function BluetoothCommunication() {
           throw new Error('Required characteristics not found');
         }
       } catch (connectionError: any) {
-        console.error(`Connection error (${retryCount + 1}):`, connectionError.message);
-
+        console.error(`Connection error (${retryCount + 1}):`, connectionError);
+        
         if (retryCount >= maxRetries) {
-          if (connectionError?.message?.includes('was disconnected')) {
-            setShowDisconnectModal(true);
-          } else {
-            setLoading(false);
-            setModelLoader(true);
-          }
+          connectingRef.current = false;
+          setLoading(false);
+          setModelLoader(true);
           return;
         }
-
+        
         retryCount++;
-        try {
-          if (connectedDeviceRef.current) {
-            await connectedDeviceRef.current.cancelConnection();
-          }
-        } catch (e) {}
       }
     }
   }
@@ -749,7 +696,7 @@ export default function BluetoothCommunication() {
       <StatusModal
         visible={modelLoader}
         type="warning"
-        message={modalMessage || 'Device not found or Inactive'}
+        message={modalMessage || 'Device not found and inactive'}
         subMessage={modalSubMessage}
         onClose={() => {
           setModelLoader(false);
