@@ -40,7 +40,7 @@ type DataPacket = {
 
 const GOOGLE_STATIC_MAPS_KEY = 'AIzaSyDsqWho-EyUaPIe2Sxp8X2tw4x7SCLOW-A';
 /** ================== Brand / Badge config ================== **/
-const FOOTER_DOMAIN = 'log.thinxview.com';
+const FOOTER_DOMAIN = 'log.thinxlog.com';
 
 // Hosted images (use your own URLs)
 const LOGO_IMG_URL =
