@@ -93,6 +93,7 @@ export default function TripDetail() {
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const chartRef = useRef(null);
   const pdfChartRef = useRef(null);
+  const hasFetchedRef = useRef(false);
 
   const fetchTripDetails = useCallback(
     async (retryCount = 0) => {
@@ -157,7 +158,6 @@ export default function TripDetail() {
 
       try {
         const result = await getTripDetails(String(tripName));
-        console.log('[TripDetail] API result:', JSON.stringify(result, null, 2));
 
         if (result.success && result.data) {
           console.log('[TripDetail] Trip data received');
@@ -193,7 +193,10 @@ export default function TripDetail() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchTripDetails(0);
+      if (!hasFetchedRef.current) {
+        fetchTripDetails(0);
+        hasFetchedRef.current = true;
+      }
     }, [fetchTripDetails])
   );
 
@@ -393,6 +396,14 @@ export default function TripDetail() {
     const cx = midx + nx * amp,
       cy = midy + ny * amp;
 
+    // Arrow at end
+    const arrowSize = 12;
+    const angle = Math.atan2(dy, dx);
+    const arrowX1 = p1i.x - arrowSize * Math.cos(angle - Math.PI / 6);
+    const arrowY1 = p1i.y - arrowSize * Math.sin(angle - Math.PI / 6);
+    const arrowX2 = p1i.x - arrowSize * Math.cos(angle + Math.PI / 6);
+    const arrowY2 = p1i.y - arrowSize * Math.sin(angle + Math.PI / 6);
+
     const halo = `
       <path d="M ${p0i.x.toFixed(1)} ${p0i.y.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${p1i.x.toFixed(1)} ${p1i.y.toFixed(1)}"
             fill="none" stroke="#ffffff" stroke-opacity="0.85" stroke-width="6" stroke-linecap="round" />
@@ -400,6 +411,8 @@ export default function TripDetail() {
     const curve = `
       <path d="M ${p0i.x.toFixed(1)} ${p0i.y.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${p1i.x.toFixed(1)} ${p1i.y.toFixed(1)}"
             fill="none" stroke="#1976D2" stroke-width="3" stroke-dasharray="8 6" stroke-linecap="round" />
+      <path d="M ${arrowX1.toFixed(1)} ${arrowY1.toFixed(1)} L ${p1i.x.toFixed(1)} ${p1i.y.toFixed(1)} L ${arrowX2.toFixed(1)} ${arrowY2.toFixed(1)}"
+            fill="none" stroke="#1976D2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
     `;
 
     return `
@@ -574,7 +587,7 @@ export default function TripDetail() {
       </tbody>
     </table>
     ${isLast ? disclaimerBox : ''}
-  ${isLast ? footerHtml(pageNo) : ''}
+    ${footerHtml(pageNo)}
   </div>`;
         })
         .join('');
@@ -591,7 +604,6 @@ export default function TripDetail() {
   .page {
     page-break-after: always;
   }
-  .page:last-child { page-break-after: auto; }
   .card {
     border:1px solid #3054E54D; border-radius:10px; padding:8px; margin-bottom:6px;
     break-inside: avoid; page-break-inside: avoid;
@@ -624,7 +636,7 @@ export default function TripDetail() {
     font-size:10px; color:#6b7280;
     border-top: 1px solid #e5e7eb;
     padding-top: 8px;
-    margin-top: 8px;
+    margin-top: 12px;
   }
   .footerx .left  { justify-self:start; }
   .footerx .center{ justify-self:center; font-weight:600; }
@@ -665,7 +677,6 @@ export default function TripDetail() {
 
  <!-- ================ PAGE 1 ================ -->
   <div class="page">
-    <div class="page-content">
     <!-- HEADER -->
     <div class="header-card">
       <div class="header">
@@ -675,8 +686,9 @@ export default function TripDetail() {
         </div>
 
         <div class="titleBlock">
-          <div class="h1">Insights and Summary Report</div>
-          <div class="meta">Generated: ${nowStr}></div>
+          <div class="h1">Insights & Summary</div>
+          <div class="h1">Report</div>
+          <div class="meta">Generated: ${nowStr}</div>
         </div>
 
         <div class="qopBlock">
@@ -771,14 +783,11 @@ export default function TripDetail() {
         ${mapBlock}
       </div>
     </div>
-    </div>
-
     ${footerHtml(1)}
   </div>
 
   <!-- ================ PAGE 2 ================ -->
   <div class="page">
-    <div class="page-content">
     <div class="card">
       <div class="title">Graphs</div>
       <div style="display:flex;justify-content:center">${chartImgTag}</div>
@@ -817,9 +826,7 @@ export default function TripDetail() {
          </div>`
         : ''
     }
-    </div>
-
-  ${footerHtml(2)}
+    ${footerHtml(2)}
   </div>
 
   ${extraTablePagesHTML}
