@@ -860,22 +860,45 @@ export default function TripDetail() {
         await RNFetchBlob.fs.mkdir(docsDir);
       }
       
-      const destPath = `${docsDir}/${pdfFilename}`;
+      // Handle duplicate filenames
+      let finalFilename = pdfFilename;
+      let destPath = `${docsDir}/${finalFilename}`;
+      let counter = 1;
+      while (await RNFetchBlob.fs.exists(destPath)) {
+        const nameWithoutExt = pdfFilename.replace('.pdf', '');
+        finalFilename = `${nameWithoutExt} (${counter}).pdf`;
+        destPath = `${docsDir}/${finalFilename}`;
+        counter++;
+      }
+      
       await RNFetchBlob.fs.cp(uri.replace('file://', ''), destPath);
       
-      // Also save to Downloads for notification
-      const downloadPath = `${RNFetchBlob.fs.dirs.DownloadDir}/${pdfFilename}`;
+      // Also save to Downloads for notification with same duplicate handling
+      let downloadFilename = pdfFilename;
+      let downloadPath = `${RNFetchBlob.fs.dirs.DownloadDir}/${downloadFilename}`;
+      let dlCounter = 1;
+      while (await RNFetchBlob.fs.exists(downloadPath)) {
+        const nameWithoutExt = pdfFilename.replace('.pdf', '');
+        downloadFilename = `${nameWithoutExt} (${dlCounter}).pdf`;
+        downloadPath = `${RNFetchBlob.fs.dirs.DownloadDir}/${downloadFilename}`;
+        dlCounter++;
+      }
+      
       await RNFetchBlob.fs.cp(uri.replace('file://', ''), downloadPath);
       
+      // Scan both files to make them appear in Google Files
+      await RNFetchBlob.fs.scanFile([{ path: destPath, mime: 'application/pdf' }]);
+      await RNFetchBlob.fs.scanFile([{ path: downloadPath, mime: 'application/pdf' }]);
+      
       await RNFetchBlob.android.addCompleteDownload({
-        title: pdfFilename,
+        title: downloadFilename,
         description: 'Trip Report PDF',
         mime: 'application/pdf',
         path: downloadPath,
         showNotification: true
       });
       
-      setPdfFilename(pdfFilename);
+      setPdfFilename(finalFilename);
       setShowPdfSuccess(true);
     } catch (error: any) {
       console.error(error);

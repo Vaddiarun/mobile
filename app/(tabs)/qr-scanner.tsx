@@ -13,64 +13,45 @@ import {
 } from 'react-native';
 import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
 import { useRouter } from 'expo-router';
-import { BleManager, State as BleState } from 'react-native-ble-plx';
-import * as IntentLauncher from 'expo-intent-launcher';
+
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import StatusModal from '../../components/StatusModel';
-
-const ble = new BleManager();
 
 export default function QRScanner() {
   const router = useRouter();
   const device = useCameraDevice('back');
   const [isScanning, setIsScanning] = useState(false);
-  const [cameraActive, setCameraActive] = useState(true);
-  const [retryCount, setRetryCount] = useState(0);
+  const [cameraActive, setCameraActive] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const { tourActive, currentStep, nextStep, skipTour } = useTour();
 
   useFocusEffect(
     useCallback(() => {
-      // Reset camera state when screen gets focus
+      console.log('QR Scanner: Screen focused - enabling camera');
       setIsScanning(false);
       setCameraActive(true);
-      setRetryCount(0);
 
-      // Failsafe: restart camera after 2 seconds if device is not available
-      const failsafeTimer = setTimeout(() => {
-        if (!device) {
-          console.log('Camera failsafe: restarting camera');
+      const subscription = AppState.addEventListener('change', (nextAppState) => {
+        if (nextAppState === 'active') {
+          console.log('App active - restarting camera');
           setCameraActive(false);
           setTimeout(() => setCameraActive(true), 100);
+        } else {
+          console.log('App backgrounded - disabling camera');
+          setCameraActive(false);
         }
-      }, 2000);
+      });
 
       return () => {
-        clearTimeout(failsafeTimer);
+        console.log('QR Scanner: Screen unfocused - disabling camera');
+        subscription.remove();
+        setCameraActive(false);
         setIsScanning(false);
       };
-    }, [device])
+    }, [])
   );
-
-  // Handle app state changes (sleep/wake)
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active') {
-        console.log('App became active - restarting camera');
-        setCameraActive(false);
-        setTimeout(() => {
-          setCameraActive(true);
-          setRetryCount(0);
-        }, 300);
-      }
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, []);
 
   // Request camera + BLE + location permissions
   useEffect(() => {
@@ -149,12 +130,10 @@ export default function QRScanner() {
         setIsScanning(true);
         console.log('QR Code scanned:', trimmedValue);
 
-        setTimeout(() => {
-          router.push({
-            pathname: '/bluetooth-communication',
-            params: { qrCode: trimmedValue },
-          });
-        }, 100);
+        router.push({
+          pathname: '/bluetooth-communication',
+          params: { qrCode: trimmedValue },
+        });
       } catch (err) {
         console.error('Scan error:', err);
         setErrorMessage('Failed to process QR code. Please try again.');
@@ -174,8 +153,6 @@ export default function QRScanner() {
       }
       for (const code of codes) {
         if (code.value) {
-          console.log('QR Code Value:', code.value);
-          setIsScanning(true);
           onScanned(code.value);
           break;
         }
@@ -183,15 +160,7 @@ export default function QRScanner() {
     },
   });
 
-  // Camera restart function
-  const restartCamera = useCallback(() => {
-    if (retryCount < 3) {
-      console.log(`Restarting camera (attempt ${retryCount + 1})`);
-      setCameraActive(false);
-      setRetryCount(prev => prev + 1);
-      setTimeout(() => setCameraActive(true), 200);
-    }
-  }, [retryCount]);
+
 
   const handleTourNext = () => {
     router.push('/(tabs)/history' as any);
@@ -200,7 +169,7 @@ export default function QRScanner() {
 
   return (
     <View style={styles.container}>
-      {device && !isScanning && cameraActive && (
+      {device && cameraActive && !isScanning && (
         <Camera
           style={StyleSheet.absoluteFillObject}
           device={device}
@@ -208,26 +177,8 @@ export default function QRScanner() {
           codeScanner={codeScanner}
           onError={(error) => {
             console.error('Camera error:', error);
-            // Trigger failsafe for session/invalid-output-configuration or any camera error
-            if (error?.message?.includes('session/invalid-output-configuration') || error?.message?.includes('session/')) {
-              console.log('Camera session error detected - triggering failsafe');
-            }
-            restartCamera();
           }}
         />
-      )}
-      
-      {/* Camera not working fallback */}
-      {(!device || !cameraActive) && (
-        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
-          <Text style={{ color: '#fff', fontSize: 16, marginBottom: 20 }}>Camera not available</Text>
-          <TouchableOpacity 
-            onPress={restartCamera}
-            style={{ backgroundColor: '#1a50db', padding: 12, borderRadius: 8 }}
-          >
-            <Text style={{ color: '#fff', fontSize: 14 }}>Retry Camera</Text>
-          </TouchableOpacity>
-        </View>
       )}
 
       {/* Header */}
@@ -258,9 +209,6 @@ export default function QRScanner() {
           setShowErrorModal(false);
           setErrorMessage('');
           setIsScanning(false);
-          // Restart camera smoothly
-          setCameraActive(false);
-          setTimeout(() => setCameraActive(true), 100);
         }}
       />
 
