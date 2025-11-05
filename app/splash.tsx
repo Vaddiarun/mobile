@@ -17,7 +17,13 @@ export default function Splash() {
         return;
       }
 
-      router.replace('/login');
+      // Check if user is already logged in
+      const user = getUser();
+      if (user?.data?.token) {
+        router.replace('/(tabs)');
+      } else {
+        router.replace('/login');
+      }
     };
 
     const t = setTimeout(checkAuthAndTrips, 1000);

@@ -107,15 +107,18 @@ export default function TripConfiguration() {
     },
   };
 
+  const userEmail = user?.data?.user?.Email || user?.data?.user?.email || user?.data?.Email || user?.data?.email || 'dev@test.com';
+  const userPhone = user?.data?.user?.Phone || user?.data?.user?.phone || user?.data?.Phone || user?.data?.phone || '1234567890';
+
   const customizeProfile = {
     profileName: 'customize_profile',
     minTemp: 0,
     maxTemp: 0,
     minHum: 0,
     maxHum: 0,
-    creator: user?.data?.user?.Email || 'dev@test.com',
-    createdBy: user?.data?.user?.Email || 'dev@test.com',
-    phoneNumber: user?.data?.user?.Phone || '1234567890',
+    creator: userEmail,
+    createdBy: userEmail,
+    phoneNumber: userPhone,
   };
 
   const allTrips = getTrips() || [];
@@ -480,16 +483,13 @@ export default function TripConfiguration() {
 
     const tripStartTime = Date.now();
     const body = {
-      username: user?.data?.user?.Username,
-      email: user?.data?.user?.Email,
-      phone: user?.data?.user?.Phone,
+      username: user?.data?.user?.Username || user?.data?.user?.username || user?.data?.Username || user?.data?.username,
+      email: user?.data?.user?.Email || user?.data?.user?.email || user?.data?.Email || user?.data?.email,
+      phone: user?.data?.user?.Phone || user?.data?.user?.phone || user?.data?.Phone || user?.data?.phone,
       tripName,
       deviceID: deviceName,
       startLocation: startLat,
       tripConfig,
-      // timestamp: tripStartTime,
-      // createdAt: tripStartTime,
-      // status: 'Started',
     };
 
     console.log('📡 Starting trip...');
@@ -559,11 +559,22 @@ export default function TripConfiguration() {
       await bleManager.cancelDeviceConnection(connected.id);
       bleSessionStore.clearActiveConnection();
       console.log('✅ Device started and disconnected');
-    } catch (bleError) {
+    } catch (bleError: any) {
       console.error('❌ BLE error:', bleError);
       bleSessionStore.clearActiveConnection();
       setApiLoading(false);
-      Alert.alert('Error', 'Failed to communicate with device');
+      const errorMsg = bleError?.message || '';
+      if (errorMsg.includes('No active connection') || errorMsg.includes('cancelled')) {
+        setModalType('error');
+        setModalMessage('Connection Lost');
+        setModalSubMessage('Bluetooth connection was lost. Please restart Bluetooth on your phone and try scanning the device again.');
+        setModelLoader(true);
+      } else {
+        setModalType('error');
+        setModalMessage('Communication Error');
+        setModalSubMessage('Failed to communicate with device. Please try again.');
+        setModelLoader(true);
+      }
       return;
     }
 
@@ -809,7 +820,18 @@ export default function TripConfiguration() {
       console.log('⚠️ BLE error:', bleError);
       bleSessionStore.clearActiveConnection();
       setApiLoading(false);
-      Alert.alert('Error', 'Failed to communicate with device');
+      const errorMsg = bleError?.message || '';
+      if (errorMsg.includes('No active connection') || errorMsg.includes('cancelled')) {
+        setModalType('error');
+        setModalMessage('Connection Lost');
+        setModalSubMessage('Bluetooth connection was lost. Please restart Bluetooth on your phone and try scanning the device again.');
+        setModelLoader(true);
+      } else {
+        setModalType('error');
+        setModalMessage('Communication Error');
+        setModalSubMessage('Failed to communicate with device. Please try again.');
+        setModelLoader(true);
+      }
       return;
     }
 

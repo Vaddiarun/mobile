@@ -37,8 +37,9 @@ export default function Home() {
 
   const loadUserData = useCallback(async () => {
     const user = getUser();
-    if (user && user.data && user.data.user) {
-      setUserName(user.data.user.Username || user.data.message?.user || 'User');
+    if (user?.data) {
+      const username = user.data.user?.Username || user.data.user?.username || user.data.Username || user.data.username || 'User';
+      setUserName(username);
     }
 
     try {

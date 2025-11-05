@@ -6,12 +6,14 @@ import './tw-interop';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TourProvider } from '../components/AppTourContext';
+import { NetworkErrorProvider } from '../components/NetworkErrorContext';
 
 export default function RootLayout() {
   return (
-    <TourProvider>
-      <SafeAreaProvider>
-      <Stack>
+    <NetworkErrorProvider>
+      <TourProvider>
+        <SafeAreaProvider>
+        <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="splash" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
@@ -33,7 +35,8 @@ export default function RootLayout() {
           options={{ title: 'Mobile to Sensor', headerShown: false }}
         />
       </Stack>
-      </SafeAreaProvider>
-    </TourProvider>
+        </SafeAreaProvider>
+      </TourProvider>
+    </NetworkErrorProvider>
   );
 }

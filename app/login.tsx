@@ -51,11 +51,12 @@ export default function Login() {
         });
       }
     } catch (e: any) {
+      const errorMsg = e.response?.data?.message || e.message || 'Invalid username or password';
       setModal({
         visible: true,
         type: 'error',
         title: 'Login Failed',
-        message: e.response?.data?.message || 'Invalid username or password',
+        message: errorMsg,
       });
     } finally {
       setLoading(false);

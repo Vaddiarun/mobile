@@ -24,17 +24,12 @@ export default function Settings() {
     setShowLogoutModal(true);
   };
 
-  const confirmLogout = async () => {
-    try {
-      await logoutUser();
-      clearUser();
-      router.replace('/login');
-    } catch (error) {
-      clearUser();
-      router.replace('/login');
-    } finally {
-      setShowLogoutModal(false);
-    }
+  const confirmLogout = () => {
+    setShowLogoutModal(false);
+    clearUser();
+    logoutUser().catch(() => {});
+    router.dismissAll();
+    router.replace('/login');
   };
 
   const formatDate = (timestamp: number | string): string => {
@@ -46,9 +41,9 @@ export default function Settings() {
     });
   };
 
-  const userName = user?.data?.user?.Username || 'User';
-  const userEmail = user?.data?.user?.Email || 'Not available';
-  const userPhone = user?.data?.user?.Phone || 'Not available';
+  const userName = user?.data?.user?.Username || user?.data?.user?.username || user?.data?.Username || user?.data?.username || 'User';
+  const userEmail = user?.data?.user?.Email || user?.data?.user?.email || user?.data?.Email || user?.data?.email || 'Not available';
+  const userPhone = user?.data?.user?.Phone || user?.data?.user?.phone || user?.data?.Phone || user?.data?.phone || 'Not available';
   const registeredDate = formatDate(Date.now());
 
   const handleTourNext = () => {
