@@ -37,6 +37,8 @@ export default function Login() {
         username,
         password,
         rememberMe,
+      }, {
+        timeout: 10000
       });
 
       if (res.data?.valid && res.data?.data?.token) {
@@ -51,7 +53,10 @@ export default function Login() {
         });
       }
     } catch (e: any) {
-      const errorMsg = e.response?.data?.message || e.message || 'Invalid username or password';
+      console.error('Login error:', e);
+      const errorMsg = e.code === 'ECONNABORTED' 
+        ? 'Request timeout. Please check your connection.'
+        : e.response?.data?.message || e.message || 'Invalid username or password';
       setModal({
         visible: true,
         type: 'error',

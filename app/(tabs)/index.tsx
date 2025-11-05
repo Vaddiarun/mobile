@@ -203,18 +203,15 @@ export default function Home() {
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
         ]);
 
         const allGranted = Object.values(permissions).every(
           (status) => status === PermissionsAndroid.RESULTS.GRANTED
         );
 
-        if (!allGranted) {
-          Alert.alert(
-            'Permissions Required',
-            'Bluetooth and Location permissions are required for scanning devices.'
-          );
-        }
+        // Permissions requested silently
       } else if (Platform.Version >= 23) {
         const hasLoc = await PermissionsAndroid.check(
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
@@ -231,12 +228,11 @@ export default function Home() {
             }
           );
 
-          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-            Alert.alert(
-              'Permission Required',
-              'Location permission is required to scan for Bluetooth devices.'
-            );
-          }
+          // Request storage permission
+          await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+            PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+          ]);
         }
       }
     };

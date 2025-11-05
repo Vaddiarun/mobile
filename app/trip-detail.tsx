@@ -12,10 +12,11 @@ import {
   Linking,
   Animated,
   Easing,
+  Platform,
 } from 'react-native';
 import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
+import RNFetchBlob from 'react-native-blob-util';
 import { captureRef } from 'react-native-view-shot';
 import { useRef } from 'react';
 import { Image } from 'react-native';
@@ -27,6 +28,7 @@ import { Buffer } from 'buffer';
 import { getTrips } from '../mmkv-storage/storage';
 import { getTripDetails } from '../services/RestApiServices/HistoryService';
 import DynamicLineChart from '../components/DynamicLineChart';
+import StatusModal from '../components/StatusModel';
 
 type DataPacket = {
   time: number;
@@ -91,6 +93,8 @@ export default function TripDetail() {
   const [apiTrip, setApiTrip] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [showPdfSuccess, setShowPdfSuccess] = useState(false);
+  const [pdfFilename, setPdfFilename] = useState('');
   const chartRef = useRef(null);
   const pdfChartRef = useRef(null);
   const hasFetchedRef = useRef(false);
@@ -834,11 +838,48 @@ export default function TripDetail() {
         </html>
       `;
 
+      // Create filename: DeviceName_Month_Day_Year_Hour:Min_AMPM.pdf
+      const deviceId = trip?.deviceid || trip?.deviceID || trip?.deviceName || 'Device';
+      const timestamp = trip?.startTime || (packets.length > 0 ? packets[0].time : Math.floor(Date.now() / 1000));
+      const date = new Date(timestamp * 1000);
+      const month = date.toLocaleDateString('en-US', { month: 'short' });
+      const day = date.getDate();
+      const year = date.getFullYear();
+      const hours = date.getHours();
+      const mins = date.getMinutes().toString().padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const hour12 = hours % 12 || 12;
+      const pdfFilename = `${deviceId}_${month}_${day}_${year}_${hour12}-${mins}_${ampm}.pdf`;
+      
       const { uri } = await Print.printToFileAsync({ html });
-      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
-    } catch (error) {
+      
+      // Use public Documents folder in internal storage root
+      const docsDir = '/storage/emulated/0/Documents';
+      const exists = await RNFetchBlob.fs.exists(docsDir);
+      if (!exists) {
+        await RNFetchBlob.fs.mkdir(docsDir);
+      }
+      
+      const destPath = `${docsDir}/${pdfFilename}`;
+      await RNFetchBlob.fs.cp(uri.replace('file://', ''), destPath);
+      
+      // Also save to Downloads for notification
+      const downloadPath = `${RNFetchBlob.fs.dirs.DownloadDir}/${pdfFilename}`;
+      await RNFetchBlob.fs.cp(uri.replace('file://', ''), downloadPath);
+      
+      await RNFetchBlob.android.addCompleteDownload({
+        title: pdfFilename,
+        description: 'Trip Report PDF',
+        mime: 'application/pdf',
+        path: downloadPath,
+        showNotification: true
+      });
+      
+      setPdfFilename(pdfFilename);
+      setShowPdfSuccess(true);
+    } catch (error: any) {
       console.error(error);
-      Alert.alert('Error', 'Failed to generate PDF');
+      Alert.alert('Error', error?.message || 'Failed to generate PDF');
     } finally {
       setGeneratingPDF(false);
     }
@@ -1110,6 +1151,14 @@ export default function TripDetail() {
           />
         </View>
       </View>
+
+      <StatusModal
+        visible={showPdfSuccess}
+        type="success"
+        message="PDF Saved Successfully"
+        subMessage={`Saved to Documents/${pdfFilename}`}
+        onClose={() => setShowPdfSuccess(false)}
+      />
     </SafeAreaView>
   );
 }

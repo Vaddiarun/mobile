@@ -258,6 +258,17 @@ export default function TripConfiguration() {
                 setInputValue(clamped.toString());
               }
             }}
+            onEndEditing={() => {
+              const num = parseInt(inputValue);
+              if (isNaN(num) || inputValue === '' || inputValue === '-') {
+                setValue(0);
+                setInputValue('0');
+              } else {
+                const clamped = isHumidity ? Math.max(0, Math.min(100, num)) : num;
+                setValue(clamped);
+                setInputValue(clamped.toString());
+              }
+            }}
             keyboardType="numeric"
             returnKeyType="done"
           />

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "thinxlog",
+    "name": "Thinxlog",
     "scheme": "thinxlog",
     "slug": "my-expo-app",
     "deepLinks": ["thinxlog://"],
@@ -46,7 +46,11 @@
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADVERTISE",
-        "android.permission.BLUETOOTH_ADMIN"
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO"
       ],
       "package": "com.termi007xt.myexpoapp",
       "config": {

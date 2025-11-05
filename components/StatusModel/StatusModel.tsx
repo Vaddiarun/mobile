@@ -11,9 +11,10 @@ type Props = {
   message: string;
   subMessage?: string;
   onClose: () => void;
+  customButtons?: React.ReactNode;
 };
 
-export default function StatusModal({ visible, type, message, subMessage, onClose }: Props) {
+export default function StatusModal({ visible, type, message, subMessage, onClose, customButtons }: Props) {
   const getIconComponent = () => {
     switch (type) {
       case 'success':
@@ -29,9 +30,9 @@ export default function StatusModal({ visible, type, message, subMessage, onClos
     }
   };
 
-  // ✅ Auto close for success, info & warning
+  // ✅ Auto close for success, info & warning (only if no custom buttons)
   useEffect(() => {
-    if ((type === 'success' || type === 'info' || type === 'warning') && visible) {
+    if ((type === 'success' || type === 'info' || type === 'warning') && visible && !customButtons) {
       const timer = setTimeout(
         () => {
           onClose();
@@ -40,7 +41,7 @@ export default function StatusModal({ visible, type, message, subMessage, onClos
       );
       return () => clearTimeout(timer);
     }
-  }, [type, visible, onClose]);
+  }, [type, visible, onClose, customButtons]);
 
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -50,8 +51,8 @@ export default function StatusModal({ visible, type, message, subMessage, onClos
           <Text style={[styles.message, { fontWeight: 'bold', fontSize: 16 }]}>{message}</Text>
           {subMessage ? <Text style={styles.message}>{subMessage}</Text> : null}
 
-          {/* Show button only for error */}
-          {type === 'error' && (
+          {/* Custom buttons or default button */}
+          {customButtons ? customButtons : type === 'error' && (
             <TouchableOpacity onPress={onClose} style={styles.button}>
               <Text style={styles.btnText}>OK</Text>
             </TouchableOpacity>

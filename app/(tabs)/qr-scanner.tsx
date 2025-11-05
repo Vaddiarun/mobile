@@ -9,6 +9,7 @@ import {
   PermissionsAndroid,
   Platform,
   Alert,
+  AppState,
 } from 'react-native';
 import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
 import { useRouter } from 'expo-router';
@@ -53,6 +54,24 @@ export default function QRScanner() {
     }, [device])
   );
 
+  // Handle app state changes (sleep/wake)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        console.log('App became active - restarting camera');
+        setCameraActive(false);
+        setTimeout(() => {
+          setCameraActive(true);
+          setRetryCount(0);
+        }, 300);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   // Request camera + BLE + location permissions
   useEffect(() => {
     (async () => {
@@ -68,18 +87,15 @@ export default function QRScanner() {
             PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
             PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
             PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+            PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+            PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
           ]);
 
           const allGranted = Object.values(permissions).every(
             (status) => status === PermissionsAndroid.RESULTS.GRANTED
           );
 
-          if (!allGranted) {
-            Alert.alert(
-              'Permissions Required',
-              'Bluetooth and Location permissions are required for scanning devices.'
-            );
-          }
+          // Permissions requested silently
         } else if (Platform.Version >= 23) {
           const hasLoc = await PermissionsAndroid.check(
             PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
@@ -96,12 +112,11 @@ export default function QRScanner() {
               }
             );
 
-            if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-              Alert.alert(
-                'Permission Required',
-                'Location permission is required to scan for Bluetooth devices.'
-              );
-            }
+            // Request storage permission
+            await PermissionsAndroid.requestMultiple([
+              PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+              PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+            ]);
           }
         }
       }
