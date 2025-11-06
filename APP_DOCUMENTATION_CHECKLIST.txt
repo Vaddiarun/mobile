@@ -1,0 +1,277 @@
+================================================================================
+THINXLOG APP - GOOGLE PLAY STORE DOCUMENTATION CHECKLIST
+================================================================================
+
+Last Updated: [DATE]
+App Name: Thinxlog
+Package: com.termi007xt.myexpoapp
+
+================================================================================
+1. API LEVEL TARGET
+================================================================================
+
+Current Configuration:
+- compileSdk: 35 (Android 15)
+- targetSdk: 35 (Android 15)
+- minSdk:  24 (Android 7.0)
+
+
+================================================================================
+2. SHORT DESCRIPTION (Max 80 characters)
+================================================================================
+
+Suggested:
+"IoT sensor trip tracking with Bluetooth, temperature & humidity monitoring"
+
+Character count: 73/80
+
+================================================================================
+3. FULL DESCRIPTION
+================================================================================
+
+Thinxlog is a professional IoT sensor management application designed for 
+tracking temperature and humidity data during transportation trips. 
+
+The app connects to Bluetooth Low Energy (BLE) sensors via QR code scanning, 
+allowing users to:
+- Start and stop trip monitoring sessions
+- Configure customer and box profiles with custom temperature/humidity thresholds
+- Track real-time location data during trips
+- View trip history with detailed sensor readings
+- Export trip data for analysis
+
+Ideal for cold chain logistics, pharmaceutical transport, and any 
+temperature-sensitive cargo monitoring needs.
+
+
+================================================================================
+4. DATA YOUR APP COLLECTS
+================================================================================
+
+USER ACCOUNT DATA:
+- Username
+- Email address
+- Phone number (with country code +91)
+- Password (hashed before transmission)
+
+LOCATION DATA:
+- GPS coordinates (latitude/longitude)
+- Formatted address (via Google Geocoding API)
+- Collected at: Trip start and trip stop
+
+DEVICE/SENSOR DATA:
+- Device ID (from QR code)
+- Temperature readings (°C)
+- Humidity readings (%RH)
+- Trip timestamps
+- Sensor hardware version
+- Sensor firmware version
+
+TRIP CONFIGURATION DATA:
+- Customer profile name
+- Box profile settings (temp/humidity thresholds)
+- Trip name (auto-generated)
+- Trip start/stop locations
+
+APP USAGE DATA:
+- App tour completion status
+- Authentication tokens (JWT)
+
+
+================================================================================
+5. THIRD-PARTY SDKs AND DATA COLLECTION
+================================================================================
+
+1. EXPO SDK (v54.0.12)
+   Data Collected: ### Crash reports (if enabled), device info
+   Purpose: App framework and development tools
+   Privacy Policy: https://expo.dev/privacy
+
+2. GOOGLE MAPS PLATFORM
+   Data Collected: Location data, device identifiers
+   Purpose: Map display and geocoding
+   Privacy Policy: https://policies.google.com/privacy
+
+3. GOOGLE ML KIT (Barcode Scanning v17.3.0)
+   Data Collected: Camera frames (processed on-device)
+   Purpose: QR code scanning
+   Privacy Policy: https://policies.google.com/privacy
+
+4. AXIOS (v1.12.2)
+   Data Collected: Network request metadata
+   Purpose: HTTP client for API communication
+   Privacy Policy: N/A (open source library)
+
+5. REACT NATIVE BLE PLX (v3.5.0)
+   Data Collected: Bluetooth device information
+   Purpose: BLE sensor communication
+   Privacy Policy: N/A (open source library)
+
+6. REACT NATIVE VISION CAMERA (v4.7.2)
+   Data Collected: Camera access
+   Purpose: QR code scanning
+   Privacy Policy: N/A (open source library)
+
+7. REACT NATIVE MAPS (v1.20.1)
+   Data Collected: Location data
+   Purpose: Map display
+   Privacy Policy: N/A (open source library)
+
+8. REACT NATIVE GEOLOCATION SERVICE
+   Data Collected: GPS location
+   Purpose: Location tracking
+   Privacy Policy: N/A (open source library)
+
+NOTE: No analytics SDKs (Firebase, Google Analytics, Sentry) are integrated.
+
+
+================================================================================
+6. ALL DATA TYPES COLLECTED (SUMMARY FOR GOOGLE PLAY)
+================================================================================
+
+PERSONAL INFORMATION:
+☑ Name (username)
+☑ Email address
+☑ Phone number
+
+LOCATION:
+☑ Precise location (GPS)
+☑ Approximate location (formatted address)
+
+DEVICE OR OTHER IDs:
+☑ Device ID (Bluetooth sensor IDs)
+
+APP ACTIVITY:
+☑ App interactions (trip history, configurations)
+
+APP INFO AND PERFORMANCE:
+☑ Crash logs ### (IF ENABLED)
+☑ Diagnostics ### (IF ENABLED)
+
+SENSOR DATA:
+☑ Temperature readings
+☑ Humidity readings
+
+================================================================================
+7. PURPOSE FOR COLLECTING EACH DATA TYPE
+================================================================================
+
+DATA TYPE                    | PURPOSE
+-----------------------------|------------------------------------------
+Username                     | User authentication and account management
+Email address                | User authentication and account management
+Phone number                 | User authentication and OTP verification
+Password                     | Secure user authentication
+GPS Location                 | Track trip start/stop locations for logistics
+Formatted Address            | Display human-readable location information
+Temperature readings         | Monitor environmental conditions during transport
+Humidity readings            | Monitor environmental conditions during transport
+Device ID (Bluetooth)        | Identify and connect to specific BLE sensors
+Trip Configuration           | Apply custom monitoring thresholds per customer
+Trip History                 | Provide historical data and compliance reports
+Onboarding Status            | Improve user experience (stored locally only)
+Authentication Token         | Maintain secure session state
+
+================================================================================
+8. THIRD PARTIES YOU SHARE DATA WITH
+================================================================================
+
+1. YOUR BACKEND API (AWS)
+   Endpoint: https://adfd9ywki5.execute-api.ap-south-1.amazonaws.com/dev
+   Region: ap-south-1 (Mumbai)
+   Data Shared: All user data, trip data, sensor readings, location data
+   Purpose: Core app functionality and data storage
+
+2. GOOGLE MAPS PLATFORM
+   Data Shared: GPS coordinates
+   Purpose: Geocoding (convert coordinates to addresses)
+   Privacy Policy: https://policies.google.com/privacy
+
+3. AMAZON WEB SERVICES (AWS)
+   Data Shared: All data sent to your backend API
+   Purpose: Cloud hosting and data storage
+   Privacy Policy: https://aws.amazon.com/privacy/
+
+DATA NOT SHARED WITH:
+✗ Analytics providers (no Firebase Analytics, Google Analytics)
+✗ Advertising networks
+✗ Social media platforms
+✗ Crash reporting services (no Sentry, Crashlytics)
+✗ Other third-party services
+
+
+================================================================================
+9. DATA SECURITY PRACTICES
+================================================================================
+
+ENCRYPTION IN TRANSIT:
+☑ All API calls use HTTPS/TLS encryption
+☑ BASE_URL: https://adfd9ywki5.execute-api.ap-south-1.amazonaws.com/dev
+☑ Minimum TLS version: ### VERIFY YOUR API GATEWAY TLS VERSION (1.2 or 1.3)
+
+ENCRYPTION AT REST:
+☑ Local storage encrypted using MMKV with AES encryption
+☑ Encryption key: "gndthinxloguser-341" ### CONSIDER ROTATING THIS KEY
+☑ User data, trip data, and tokens stored encrypted locally
+
+AUTHENTICATION & AUTHORIZATION:
+☑ Bearer token authentication (JWT)
+☑ Tokens stored in encrypted local storage
+☑ Token expiration: ### SPECIFY TOKEN EXPIRATION TIME
+☑ OTP verification for registration
+
+BLUETOOTH SECURITY:
+☑ BLE connections use standard Bluetooth security protocols
+☑ Device pairing via QR code scanning
+
+SERVER-SIDE SECURITY:
+- API Gateway authentication
+- Lambda function permissions
+- Database encryption
+- Access control policies
+- Logging and monitoring
+
+RECOMMENDED STATEMENT FOR GOOGLE PLAY:
+"Data is encrypted in transit using HTTPS/TLS 1.2+. Local data is encrypted 
+at rest using AES encryption. User authentication uses secure token-based 
+authentication with OTP verification. Bluetooth connections follow standard 
+BLE security protocols."
+
+
+================================================================================
+10. DATA RETENTION AND DELETION POLICY
+================================================================================
+
+LOCAL STORAGE (On Device):
+- User data: Stored until user logs out (clearUser() function)
+- Onboarding flags: Stored permanently (can be cleared with app data)
+
+SERVER STORAGE (Your Backend):
+- User account data: Retained while account is active
+- Trip data: Retained indefinitely
+- Sensor readings: Retained with associated trip data
+- Location data: Retained with trip records
+
+
+USER RIGHTS:
+☑ Right to access data: User can access all trips associated with their account and view detailed analytics calculated on the data.
+☑ Right to export data: User is able to download and share a report of trip data, including detailed analytics and all trip records in pdf format.
+
+RECOMMENDED POLICY STATEMENT:
+"User account data is retained while the account is active. Trip data is 
+retained indefinitely on server and till logout on phone, for historical records and compliance purposes. 
+Sensor readings and location data are retained with associated trip records."
+
+================================================================================
+16. CONTACT INFORMATION
+================================================================================
+
+Developer/Company Name: ### YOUR COMPANY NAME
+Support Email: ### YOUR SUPPORT EMAIL
+Privacy Email: ### YOUR PRIVACY EMAIL
+Website: ### YOUR WEBSITE URL
+Address: ### YOUR BUSINESS ADDRESS (required for Google Play)
+
+================================================================================
+END OF DOCUMENTATION CHECKLIST
+================================================================================

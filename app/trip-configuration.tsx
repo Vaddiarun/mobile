@@ -554,6 +554,7 @@ export default function TripConfiguration() {
       let offset = 0;
       startBuffer.writeUInt8(0xa3, offset++);
       startBuffer.writeUInt8(0x07, offset++);
+      // DATA RECORDING INTERVAL: Change 60 to 600 for 10 minutes (value is in seconds)
       startBuffer.writeUInt16LE(60, offset); // 60 second interval
       offset += 2;
       startBuffer.writeUInt8(1, offset++); // tripOn = true
@@ -738,6 +739,7 @@ export default function TripConfiguration() {
                   const stopBuffer = Buffer.alloc(9);
                   stopBuffer.writeUInt8(0xa3, 0);
                   stopBuffer.writeUInt8(0x07, 1);
+                  // DATA RECORDING INTERVAL: Change 60 to 600 for 10 minutes (value is in seconds)
                   stopBuffer.writeUInt16LE(60, 2);
                   stopBuffer.writeUInt8(0, 4);
                   stopBuffer.writeUInt32LE(0, 5);

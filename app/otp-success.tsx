@@ -29,7 +29,7 @@ export default function OtpSuccess() {
       <Text className="mt-6 text-4xl font-bold text-gray-800">You're In</Text>
       <Text className="mt-6 text-2xl font-bold text-gray-800">Verification Successful!</Text>
       <Text className="mt-2 text-center text-base text-gray-600">
-        Your account has been verified successfully
+        Your account has been verified successfully, Please Login to continue
       </Text>
     </SafeAreaView>
   );

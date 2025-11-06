@@ -1,6 +1,6 @@
 // app/trip-records.tsx
 import React, { useMemo, useState, useEffect } from 'react';
-import { View, Text, FlatList, Pressable, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, Pressable, ActivityIndicator, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -231,19 +231,21 @@ export default function TripRecords() {
                   </TouchableOpacity>
                 </View>
                 {showAllPages && (
-                  <View className="mt-3 flex-row flex-wrap justify-center gap-2">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                      <TouchableOpacity
-                        key={page}
-                        onPress={() => {
-                          setCurrentPage(page);
-                          setShowAllPages(false);
-                        }}
-                        className={`h-8 w-8 items-center justify-center rounded-full ${currentPage === page ? 'bg-blue-600' : 'bg-gray-200'}`}>
-                        <Text className={currentPage === page ? 'text-white font-semibold text-xs' : 'text-gray-700 text-xs'}>{page}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                  <ScrollView className="mt-3" style={{ maxHeight: 144 }} showsVerticalScrollIndicator={true}>
+                    <View className="flex-row flex-wrap justify-center gap-2">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                        <TouchableOpacity
+                          key={page}
+                          onPress={() => {
+                            setCurrentPage(page);
+                            setShowAllPages(false);
+                          }}
+                          className={`h-8 w-8 items-center justify-center rounded-full ${currentPage === page ? 'bg-blue-600' : 'bg-gray-200'}`}>
+                          <Text className={currentPage === page ? 'text-white font-semibold text-xs' : 'text-gray-700 text-xs'}>{page}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </ScrollView>
                 )}
               </View>
             )}
