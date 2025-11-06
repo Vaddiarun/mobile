@@ -18,6 +18,11 @@
   <!-- Network (if you call APIs) -->
   <uses-permission android:name="android.permission.INTERNET" />
 
+  <!-- Storage permissions for PDF generation -->
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+  <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+
   <!-- Optional; only if you actually need SYSTEM_ALERT_WINDOW -->
   <!-- <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/> -->
 
@@ -49,7 +54,8 @@
       android:allowBackup="true"
       android:theme="@style/AppTheme"
       android:supportsRtl="true"
-      android:enableOnBackInvokedCallback="false">
+      android:enableOnBackInvokedCallback="false"
+      android:requestLegacyExternalStorage="true">
 
     <!-- Disable Expo Updates in bare builds (keep consistent) -->
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="false"/>
